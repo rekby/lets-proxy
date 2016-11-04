@@ -7,5 +7,7 @@ pwd
 go env
 ip addr
 
-ping  -c 5 ya.ru
-ping6 -c 5 ya.ru
+ping  -nc 5 ya.ru
+ping6 -nc 5 ya.ru
+
+http://ifconfig.io

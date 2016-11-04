@@ -10,4 +10,4 @@ ip addr
 ping  -nc 5 ya.ru
 ping6 -nc 5 ya.ru
 
-http://ifconfig.io
+curl http://ifconfig.io

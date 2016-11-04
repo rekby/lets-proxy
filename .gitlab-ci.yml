@@ -1,0 +1,5 @@
+build:
+  tags:
+    - docker
+  script:
+    - ./gitlab/test.sh

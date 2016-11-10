@@ -6,6 +6,8 @@ eval "$(curl -sL https://raw.githubusercontent.com/travis-ci/gimme/master/gimme 
 
 pwd
 ip addr
+ping6 -c 10 ifconfig.io
+
 export GOPATH=/gopath
 mkdir -p ${GOPATH}/src/github.com/rekby/lets-proxy
 cp -R ./ ${GOPATH}/src/github.com/rekby/lets-proxy/

@@ -3,6 +3,8 @@
 eval "$(curl -sL https://raw.githubusercontent.com/travis-ci/gimme/master/gimme | GIMME_GO_VERSION=1.7 bash)"
 
 pwd
+ip addr
+GOPATH=/gopath
 mkdir -p ${GOPATH}/src/github.com/rekby/lets-proxy
 cp -R ./ ${GOPATH}/src/github.com/rekby/lets-proxy/
 

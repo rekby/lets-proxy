@@ -29,7 +29,7 @@ echo "Tmp domain: $TMP_DOMAIN"
 wget https://github.com/rekby/ypdd/releases/download/v0.2/ypdd-linux-amd64.tar.gz
 tar -zxvf ypdd-linux-amd64.tar.gz
 
-MY_IPv6=`curl -6 ifconfig.io/ip`
+MY_IPv6=`wget -6 http://ifconfig.io/ip -O - 2>/dev/null`
 echo MY IPv6: ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN} AAAA ${MY_IPv6}
 

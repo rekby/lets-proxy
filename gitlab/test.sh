@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+yum install -y wget iproute
+
 eval "$(curl -sL https://raw.githubusercontent.com/travis-ci/gimme/master/gimme | GIMME_GO_VERSION=1.7 bash)"
 
 pwd
@@ -22,7 +24,6 @@ TMP_DOMAIN="$TMP_SUBDOMAIN.$DOMAIN"
 
 echo "Tmp domain: $TMP_DOMAIN"
 
-yum install -y wget
 wget https://github.com/rekby/ypdd/releases/download/v0.2/ypdd-linux-amd64.tar.gz
 tar -zxvf ypdd-linux-amd64.tar.gz
 

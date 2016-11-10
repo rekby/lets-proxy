@@ -2,8 +2,9 @@
 
 eval "$(curl -sL https://raw.githubusercontent.com/travis-ci/gimme/master/gimme | GIMME_GO_VERSION=1.7 bash)"
 
+pwd
 mkdir -p $GOPATH/src/github.com/rekby/lets-proxy
-rsync -Hha ./ $GOPATH/src/github.com/rekby/lets-proxy/
+cp -R ./ $GOPATH/src/github.com/rekby/lets-proxy/
 
 go build gitlab/http-ok.go -o http-ok
 ./http-ok &

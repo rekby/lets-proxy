@@ -3,10 +3,10 @@
 eval "$(curl -sL https://raw.githubusercontent.com/travis-ci/gimme/master/gimme | GIMME_GO_VERSION=1.7 bash)"
 
 pwd
-mkdir -p $GOPATH/src/github.com/rekby/lets-proxy
-cp -R ./ $GOPATH/src/github.com/rekby/lets-proxy/
+mkdir -p ${GOPATH}/src/github.com/rekby/lets-proxy
+cp -R ./ ${GOPATH}/src/github.com/rekby/lets-proxy/
 
-go build gitlab/http-ok.go -o http-ok
+go build -o http-ok gitlab/http-ok.go
 ./http-ok &
 
 echo "Test http-ok: "
@@ -24,12 +24,12 @@ wget https://github.com/rekby/ypdd/releases/download/v0.2/ypdd-linux-amd64.tar.g
 tar -zxvf ypdd-linux-amd64.tar.gz
 
 
-echo MY IPv6: $MY_IPv6
-./ypdd --sync $DOMAIN add $TMP_SUBDOMAIN AAAA $MY_IPv6
+echo MY IPv6: ${MY_IPv6}
+./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN} AAAA ${MY_IPv6}
 
 go build github.com/rekby/lets-proxy -o proxy
 
 ./proxy &
 
-TEST=`curl http://$TMP_DOMAIN`
+TEST=`curl http://${TMP_DOMAIN}`
 test "$TEST" == "OK"

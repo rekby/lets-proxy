@@ -28,7 +28,7 @@ var (
 	targetPort        = flag.Int("target-port", 80, "")
 	targetConnTimeout = flag.Duration("target-conn-timeout", time.Second, "")
 	acmeApiUrl        = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
-	acmeTestServer    = flag.Bool("test-server", false, "Use test lets encrypt server instead of <acme-server>")
+	acmeTestServer    = flag.Bool("test", false, "Use test lets encrypt server instead of <acme-server>")
 )
 
 var (

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-yum install -y wget iproute
+yum install -y wget iproute openssl
 
 eval "$(curl -sL https://raw.githubusercontent.com/travis-ci/gimme/master/gimme | GIMME_GO_VERSION=1.7 bash)"
 

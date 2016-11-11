@@ -250,13 +250,13 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 	}
 	cert = &tls.Certificate{}
 	cert.Certificate = [][]byte{certResponse.Certificate}
-	cert.Leaf, err = x509.ParseCertificate(certResponse.Certificate)
-	if err == nil {
-		logrus.Debugf("Parse certificate for domain '%v'", domain)
-	} else {
-		logrus.Errorf("Can't parse certificate for domain '%v':%v", domain, err)
-		return nil, errors.New("Can't parse certificate")
-	}
+	//cert.Leaf, err = x509.ParseCertificate(certResponse.Certificate)
+	//if err == nil {
+	//	logrus.Debugf("Parse certificate for domain '%v'", domain)
+	//} else {
+	//	logrus.Errorf("Can't parse certificate for domain '%v':%v", domain, err)
+	//	return nil, errors.New("Can't parse certificate")
+	//}
 	return cert, nil
 }
 

@@ -108,6 +108,12 @@ func handleTcpConnection(in *net.TCPConn) {
 		MinVersion:tls.VersionSSL30,
 	}
 	tlsConn := tls.Server(in, &tlsConfig)
+	err = tlsConn.Handshake()
+	if err == nil {
+		logrus.Debug("Handshake for incoming:", tlsConn.RemoteAddr().String())
+	} else {
+		logrus.Infof("Error in tls handshake from '%v':%v", tlsConn.RemoteAddr(), err)
+	}
 
 	startProxy(target, tlsConn)
 }

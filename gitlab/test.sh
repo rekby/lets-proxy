@@ -21,7 +21,7 @@ echo
 
 DOMAIN="gitlab-test.1gb.ru"
 
-TMP_SUBDOMAIN="tmp-`date +%Y-%m-%d--%H-%M-%S--%N--$RANDOM$RANDOM`.ya"
+TMP_SUBDOMAIN="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM.ya"
 TMP_DOMAIN="$TMP_SUBDOMAIN.$DOMAIN"
 
 echo "Tmp domain: $TMP_DOMAIN"

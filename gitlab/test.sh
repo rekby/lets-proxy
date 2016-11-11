@@ -36,6 +36,7 @@ echo MY IPv6: ${MY_IPv6}
 go build -o proxy github.com/rekby/lets-proxy
 
 ./proxy --test &
+sleep 10 # Allow to start, generate keys, etc.
 
 TEST=`curl -vk https://${TMP_DOMAIN}`
 test "$TEST" == "OK"

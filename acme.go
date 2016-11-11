@@ -81,7 +81,7 @@ func (this *acmeStruct) CreateCertificate(domain string) (cert *tls.Certificate,
 	// Check suffix for avoid mutex sync in DeleteAcmeAuthDomain
 	if strings.HasSuffix(domain, ".acme.invalid") {
 		logrus.Debugf("Detect auth-domain mode for domain '%v'", domain)
-		if this.DeleteAcmeAuthDomain(strings.TrimSuffix(domain, ".acme.invalid")) {
+		if this.DeleteAcmeAuthDomain(domain) {
 			logrus.Debugf("Return self-signed certificate for domain '%v'", domain)
 			return this.createCertificateSelfSigned(domain)
 		} else {

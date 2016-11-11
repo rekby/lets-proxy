@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-yum install -y wget iproute openssl
+#yum install -y iproute
 
 eval "$(curl -sL https://raw.githubusercontent.com/travis-ci/gimme/master/gimme | GIMME_GO_VERSION=1.7 bash)"
 
@@ -26,10 +26,10 @@ TMP_DOMAIN="$TMP_SUBDOMAIN.$DOMAIN"
 
 echo "Tmp domain: $TMP_DOMAIN"
 
-wget https://github.com/rekby/ypdd/releases/download/v0.2/ypdd-linux-amd64.tar.gz
+curl https://github.com/rekby/ypdd/releases/download/v0.2/ypdd-linux-amd64.tar.gz > ypdd-linux-amd64.tar.gz 2>/de/null
 tar -zxvf ypdd-linux-amd64.tar.gz
 
-MY_IPv6=`wget -6 http://ifconfig.io/ip -O - 2>/dev/null`
+MY_IPv6=`curl -6 http://ifconfig.io/ip 2>/dev/null`
 echo MY IPv6: ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN} AAAA ${MY_IPv6}
 
@@ -38,5 +38,5 @@ go build -o proxy github.com/rekby/lets-proxy
 ./proxy --test &
 sleep 10 # Allow to start, generate keys, etc.
 
-TEST=`wget -O - --no-check-certificate https://${TMP_DOMAIN}`
+TEST=`curl -vk https://${TMP_DOMAIN}`
 test "$TEST" == "OK"

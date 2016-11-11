@@ -1,0 +1,83 @@
+{
+	"ImportPath": "github.com/rekby/lets-proxy",
+	"GoVersion": "go1.7",
+	"GodepVersion": "v74",
+	"Deps": [
+		{
+			"ImportPath": "github.com/Sirupsen/logrus",
+			"Comment": "v0.11.0-5-gabc6f20",
+			"Rev": "abc6f20dabf4b10195f233ad21ea6c5ba33acae0"
+		},
+		{
+			"ImportPath": "github.com/hlandau/acme/acmeapi",
+			"Comment": "v0.0.58-9-ga087733",
+			"Rev": "a087733bf7567b224b8d192e2747f794fc93a27c"
+		},
+		{
+			"ImportPath": "github.com/hlandau/acme/acmeapi/acmeutils",
+			"Comment": "v0.0.58-9-ga087733",
+			"Rev": "a087733bf7567b224b8d192e2747f794fc93a27c"
+		},
+		{
+			"ImportPath": "github.com/hlandau/goutils/clock",
+			"Rev": "0cdb66aea5b843822af6fdffc21286b8fe8379c4"
+		},
+		{
+			"ImportPath": "github.com/hlandau/goutils/net",
+			"Rev": "0cdb66aea5b843822af6fdffc21286b8fe8379c4"
+		},
+		{
+			"ImportPath": "github.com/hlandau/xlog",
+			"Comment": "v1.0.0",
+			"Rev": "197ef798aed28e08ed3e176e678fda81be993a31"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-isatty",
+			"Rev": "66b8e73f3f5cda9f96b69efd03dd3d7fc4a5cdb8"
+		},
+		{
+			"ImportPath": "github.com/peterhellberg/link",
+			"Comment": "v1.0.0",
+			"Rev": "d1cebc7ea14a5fc0de7cb4a45acae773161642c6"
+		},
+		{
+			"ImportPath": "github.com/shiena/ansicolor",
+			"Rev": "a422bbe96644373c5753384a59d678f7d261ff10"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ocsp",
+			"Rev": "9477e0b78b9ac3d0b03822fd95422e2fe07627cd"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context",
+			"Rev": "0e2717dc3cc05907dc23096ef3a9086ea93f567f"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context/ctxhttp",
+			"Rev": "0e2717dc3cc05907dc23096ef3a9086ea93f567f"
+		},
+		{
+			"ImportPath": "golang.org/x/net/idna",
+			"Rev": "0e2717dc3cc05907dc23096ef3a9086ea93f567f"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/unix",
+			"Rev": "c200b10b5d5e122be351b67af224adc6128af5bf"
+		},
+		{
+			"ImportPath": "gopkg.in/square/go-jose.v1",
+			"Comment": "v1.1.0",
+			"Rev": "aa2e30fdd1fe9dd3394119af66451ae790d50e0d"
+		},
+		{
+			"ImportPath": "gopkg.in/square/go-jose.v1/cipher",
+			"Comment": "v1.1.0",
+			"Rev": "aa2e30fdd1fe9dd3394119af66451ae790d50e0d"
+		},
+		{
+			"ImportPath": "gopkg.in/square/go-jose.v1/json",
+			"Comment": "v1.1.0",
+			"Rev": "aa2e30fdd1fe9dd3394119af66451ae790d50e0d"
+		}
+	]
+}

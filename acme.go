@@ -273,6 +273,8 @@ func (this *acmeStruct) createCertificateSelfSigned(domain string) (cert *tls.Ce
 func (this *acmeStruct) PutAcmeAuthDomain(domain string) {
 	this.acmeauthDomainsMutex.Lock()
 	defer this.acmeauthDomainsMutex.Unlock()
+
+	logrus.Debug("Put acme auth domain:", domain)
 	this.acmeAuthDomains[domain] = time.Now().Add(SNI01_EXPIRE_TOKEN)
 }
 
@@ -280,6 +282,7 @@ func (this *acmeStruct) DeleteAcmeAuthDomain(domain string) bool {
 	this.acmeauthDomainsMutex.Lock()
 	defer this.acmeauthDomainsMutex.Unlock()
 
+	logrus.Debug("Delete acme auth domain:", domain)
 	_, ok := this.acmeAuthDomains[domain]
 	if ok {
 		delete(this.acmeAuthDomains, domain)

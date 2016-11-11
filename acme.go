@@ -78,9 +78,6 @@ func (this *acmeStruct) CleanupTimer() {
 }
 
 func (this *acmeStruct) CreateCertificate(domain string) (cert *tls.Certificate, err error) {
-	//// TODO: TEMP DEBUG !!!
-	return this.createCertificateSelfSigned(domain)
-
 	// Check suffix for avoid mutex sync in DeleteAcmeAuthDomain
 	if strings.HasSuffix(domain, ".acme.invalid") {
 		logrus.Debugf("Detect auth-domain mode for domain '%v'", domain)
@@ -250,6 +247,7 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 	}
 	cert = &tls.Certificate{}
 	cert.Certificate = [][]byte{certResponse.Certificate}
+	logrus.Debugf("Certificate for domain '%v':\n%s", domain, certResponse.Certificate)
 	//cert.Leaf, err = x509.ParseCertificate(certResponse.Certificate)
 	//if err == nil {
 	//	logrus.Debugf("Parse certificate for domain '%v'", domain)

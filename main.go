@@ -74,7 +74,6 @@ func main() {
 
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	logrus.Debug(listener.Addr())
-	logrus.Debugf("%#v", listener)
 	if err != nil {
 		panic(err)
 	}
@@ -109,6 +108,7 @@ func handleTcpConnection(in *net.TCPConn) {
 	}
 	tlsConn := tls.Server(in, &tlsConfig)
 	err = tlsConn.Handshake()
+	logrus.Debug("tls ciper:", tlsConn.ConnectionState().CipherSuite)
 	if err == nil {
 		logrus.Debug("Handshake for incoming:", tlsConn.RemoteAddr().String())
 	} else {

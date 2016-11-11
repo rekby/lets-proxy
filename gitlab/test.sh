@@ -35,7 +35,7 @@ echo MY IPv6: ${MY_IPv6}
 
 go build github.com/rekby/lets-proxy -o proxy
 
-./proxy &
+./proxy --test &
 
-TEST=`curl http://${TMP_DOMAIN}`
+TEST=`curl -vk https://${TMP_DOMAIN}`
 test "$TEST" == "OK"

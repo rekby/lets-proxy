@@ -26,7 +26,7 @@ TMP_DOMAIN="$TMP_SUBDOMAIN.$DOMAIN"
 
 echo "Tmp domain: $TMP_DOMAIN"
 
-curl https://github.com/rekby/ypdd/releases/download/v0.2/ypdd-linux-amd64.tar.gz > ypdd-linux-amd64.tar.gz 2>/de/null
+curl https://github.com/rekby/ypdd/releases/download/v0.2/ypdd-linux-amd64.tar.gz > ypdd-linux-amd64.tar.gz 2>/dev/null
 tar -zxvf ypdd-linux-amd64.tar.gz
 
 MY_IPv6=`curl -6 http://ifconfig.io/ip 2>/dev/null`

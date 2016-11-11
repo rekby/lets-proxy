@@ -33,7 +33,7 @@ MY_IPv6=`wget -6 http://ifconfig.io/ip -O - 2>/dev/null`
 echo MY IPv6: ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN} AAAA ${MY_IPv6}
 
-go build github.com/rekby/lets-proxy -o proxy
+go build -o proxy github.com/rekby/lets-proxy
 
 ./proxy --test &
 

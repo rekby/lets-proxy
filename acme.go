@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"fmt"
 )
 
 const (
@@ -247,14 +248,15 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 	}
 	cert = &tls.Certificate{}
 	cert.Certificate = [][]byte{certResponse.Certificate}
-	logrus.Debugf("Certificate for domain '%v':\n%s", domain, certResponse.Certificate)
-	//cert.Leaf, err = x509.ParseCertificate(certResponse.Certificate)
-	//if err == nil {
-	//	logrus.Debugf("Parse certificate for domain '%v'", domain)
-	//} else {
-	//	logrus.Errorf("Can't parse certificate for domain '%v':%v", domain, err)
-	//	return nil, errors.New("Can't parse certificate")
-	//}
+	fmt.Printf("CERT:\n%s\n", certResponse.Certificate)
+	cert.Leaf, err = x509.ParseCertificate(certResponse.Certificate)
+	if err == nil {
+		logrus.Debugf("Parse certificate for domain '%v'", domain)
+	} else {
+		logrus.Errorf("Can't parse certificate for domain '%v':%v", domain, err)
+		return nil, errors.New("Can't parse certificate")
+	}
+	fmt.Printf("CERT PARSED\n%#v\n", cert)
 	return cert, nil
 }
 

@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 	"encoding/pem"
+	"fmt"
 )
 
 const (
@@ -235,6 +236,7 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 	var certResponse *acmeapi.Certificate
 	for i := 0; i < TRY_COUNT; i++ {
 		certResponse, err = this.client.RequestCertificate(csrDER, ctx)
+		fmt.Printf("!!!\n%v\n", certResponse.ExtraCertificates)
 		if err != nil {
 			logrus.Infof("Can't get certificate for domain '%v': %v", domain, err)
 			time.Sleep(RETRY_SLEEP)

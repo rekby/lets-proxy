@@ -253,7 +253,8 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 	certPEM := pem.EncodeToMemory(&pem.Block{Bytes: certResponse.Certificate, Type: "CERTIFICATE"})
 	for _, extraCert := range certResponse.ExtraCertificates {
 		extraCertPEM := pem.EncodeToMemory(&pem.Block{Bytes: extraCert, Type: "CERTIFICATE"})
-		certPEM = append(certPEM, []byte("\n"), extraCertPEM)
+		certPEM = append(certPEM, '\n')
+		certPEM = append(certPEM, extraCertPEM...)
 	}
 	logrus.Debugf("CERT PEM:\n%s", certPEM)
 	certKeyPEM := pemEncode(x509.MarshalPKCS1PrivateKey(certKey), "RSA PRIVATE KEY")

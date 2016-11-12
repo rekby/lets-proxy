@@ -42,8 +42,9 @@ sleep 10 # Allow to start, generate keys, etc.
 TEST=`curl -vk https://${TMP_DOMAIN}`
 
 echo "Delete record"
-ID=`./ypdd $TMP_DOMAIN list | grep $TMP_SUBDOMAIN | cut -d ' ' -f 1`
-./ypdd $TMP_DOMAIN del $ID
+ID=`./ypdd $DOMAIN list | grep $TMP_SUBDOMAIN | cut -d ' ' -f 1`
+echo "ID: $ID"
+./ypdd $DOMAIN del $ID
 
 ( test "$TEST" == "OK" && echo OK ) || ( echo FAIL && exit 1)
 

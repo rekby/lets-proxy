@@ -17,7 +17,7 @@ go build -o http-ok gitlab/http-ok.go
 sleep 1
 
 echo "Test http-ok: "
-curl http://localhost
+curl http://localhost 2>/dev/null
 echo
 
 DOMAIN="gitlab-test.1gb.ru"

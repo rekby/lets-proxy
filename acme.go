@@ -266,9 +266,10 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 	fmt.Printf("CERT PEM:\n%s\n", certPEM)
 	certKeyPEM := pemEncode(x509.MarshalPKCS1PrivateKey(certKey), "RSA PRIVATE KEY")
 
-	cert, err = tls.X509KeyPair(certPEM, certKeyPEM)
+	certV, err := tls.X509KeyPair(certPEM, certKeyPEM)
 	if err == nil {
 		logrus.Infof("Cert for domain '%v' parsed.", domain)
+		cert = &certV
 	} else {
 		logrus.Errorf("Can't parse cert for domain '%v': %v", domain, err)
 		return nil, errors.New("Can't parse cert for domain")

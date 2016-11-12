@@ -247,29 +247,18 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 		logrus.Errorf("Can't get certificate for domain '%v': %v", domain, err)
 		return nil, errors.New("Can't request certificate")
 	}
-	cert = &tls.Certificate{}
-	cert.Certificate = [][]byte{certResponse.Certificate}
-	fmt.Printf("CERT:\n%s\n", certResponse.Certificate)
-	cert.Leaf, err = x509.ParseCertificate(certResponse.Certificate)
-	if err == nil {
-		logrus.Debugf("Parse certificate for domain '%v'", domain)
-	} else {
-		logrus.Errorf("Can't parse certificate for domain '%v':%v", domain, err)
-		return nil, errors.New("Can't parse certificate")
-	}
-	fmt.Printf("CERT PARSED\n%#v\n", cert)
 
 	pemEncode := func(b []byte, t string) []byte {
 		return pem.EncodeToMemory(&pem.Block{Bytes: b, Type: t})
 	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Bytes: certResponse.Certificate, Type: "CERTIFICATE"})
-	fmt.Printf("CERT PEM:\n%s\n", certPEM)
+	logrus.Debugf("CERT PEM:\n%s", certPEM)
 	certKeyPEM := pemEncode(x509.MarshalPKCS1PrivateKey(certKey), "RSA PRIVATE KEY")
 
-	certV, err := tls.X509KeyPair(certPEM, certKeyPEM)
+	tmpCert, err := tls.X509KeyPair(certPEM, certKeyPEM)
 	if err == nil {
 		logrus.Infof("Cert for domain '%v' parsed.", domain)
-		cert = &certV
+		cert = &tmpCert
 	} else {
 		logrus.Errorf("Can't parse cert for domain '%v': %v", domain, err)
 		return nil, errors.New("Can't parse cert for domain")

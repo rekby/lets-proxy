@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 	"fmt"
+	"encoding/pem"
 )
 
 const (
@@ -257,6 +258,10 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 		return nil, errors.New("Can't parse certificate")
 	}
 	fmt.Printf("CERT PARSED\n%#v\n", cert)
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Bytes: cert.Certificate, Type: "CERTIFICATE"})
+	fmt.Printf("CERT PEM:\n%s\n", certPEM)
+
 	return cert, nil
 }
 

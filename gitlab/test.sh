@@ -40,5 +40,10 @@ go build -o proxy github.com/rekby/lets-proxy
 sleep 10 # Allow to start, generate keys, etc.
 
 TEST=`curl -vk https://${TMP_DOMAIN}`
+
+echo "Delete record"
+ID=`./ypdd $TMP_DOMAIN list | grep $TMP_SUBDOMAIN | cut -d ' ' -f 1`
+./ypdd $TMP_DOMAIN del $ID
+
 ( test "$TEST" == "OK" && echo OK ) || ( echo FAIL && exit 1)
 

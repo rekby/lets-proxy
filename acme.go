@@ -259,7 +259,7 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 	}
 	fmt.Printf("CERT PARSED\n%#v\n", cert)
 
-	certPEM := pem.EncodeToMemory(&pem.Block{Bytes: cert.Certificate, Type: "CERTIFICATE"})
+	certPEM := pem.EncodeToMemory(&pem.Block{Bytes: certResponse.Certificate, Type: "CERTIFICATE"})
 	fmt.Printf("CERT PEM:\n%s\n", certPEM)
 
 	return cert, nil

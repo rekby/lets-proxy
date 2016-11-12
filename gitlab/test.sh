@@ -39,5 +39,5 @@ go build -o proxy github.com/rekby/lets-proxy
 ./proxy --test &
 sleep 10 # Allow to start, generate keys, etc.
 
-TEST=`curl -IiHvk https://${TMP_DOMAIN}`
+TEST=`curl -vk https://${TMP_DOMAIN}`
 test "$TEST" == "OK"

@@ -7,12 +7,12 @@ import (
 	"crypto/tls"
 	"flag"
 	"github.com/Sirupsen/logrus"
+	"github.com/hashicorp/golang-lru"
 	"io"
 	"log"
 	"net"
 	"strings"
 	"time"
-	"github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -30,8 +30,8 @@ var (
 	targetConnTimeout = flag.Duration("target-conn-timeout", time.Second, "")
 	acmeApiUrl        = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
 	acmeTestServer    = flag.Bool("test", false, "Use test lets encrypt server instead of <acme-server>")
-	certDir           = flag.String("certificates", "certs", `Directory for save cached certificates. Set cert-dir="" for disable save certs`)
-	certMemCount           = flag.Int("in-memory-cnt", 10000, "How many count of certs cache in memory for prevent parse it from file")
+	certDir           = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir="" for disable save certs`)
+	certMemCount      = flag.Int("in-memory-cnt", 10000, "How many count of certs cache in memory for prevent parse it from file")
 )
 
 var (

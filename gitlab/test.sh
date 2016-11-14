@@ -36,8 +36,8 @@ echo MY IPv6: ${MY_IPv6}
 
 go build -o proxy github.com/rekby/lets-proxy
 
-#./proxy --test &
-./proxy &  ## REAL CERT. WARNING - LIMITED CERT REQUEST
+./proxy --test &
+#./proxy &  ## REAL CERT. WARNING - LIMITED CERT REQUEST
 
 sleep 10 # Allow to start, generate keys, etc.
 

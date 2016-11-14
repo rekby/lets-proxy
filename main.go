@@ -21,7 +21,7 @@ const (
 	LETSENCRYPT_STAGING_API_URL            = "https://acme-staging.api.letsencrypt.org/directory"
 	PRIVATE_KEY_BITS                       = 2048
 	TRY_COUNT                              = 10
-	RETRY_SLEEP                            = time.Second
+	RETRY_SLEEP                            = time.Second*5
 )
 
 var (
@@ -108,7 +108,7 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 	cert = certificateCacheGet(domain)
 
 	switch {
-	case cert != nil && cert.Leaf.NotAfter.Before(time.Now()):
+	case cert != nil && cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now()):
 		logrus.Warnf("Expired certificate got from cache for domain '%v'", domain)
 		// pass to create new certificate.
 	case cert != nil:

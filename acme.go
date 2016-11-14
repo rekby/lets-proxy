@@ -1,5 +1,8 @@
 package main
 
+// from time to time see https://godoc.org/golang.org/x/crypto/acme/autocert
+// it isn't ready for usage now, but can simple code in future.
+
 import (
 	"crypto/rsa"
 
@@ -11,27 +14,51 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/hlandau/acme/acmeapi"
 	"github.com/hlandau/acme/acmeapi/acmeutils"
-	context "golang.org/x/net/context"
+	"context"
 	"net"
 	"strings"
 	"sync"
 	"time"
-	"fmt"
 	"encoding/pem"
 )
 
 const (
 	SNI01_EXPIRE_TOKEN time.Duration = time.Minute * 10
+	ACME_DOMAIN_SUFFIX = ".acme.invalid"
 )
 
 type acmeStruct struct {
-	serverAddress string
-	privateKey    *rsa.PrivateKey
-	client        *acmeapi.Client
+	serverAddress    string
+	privateKey       *rsa.PrivateKey
+	client           *acmeapi.Client
 
-	mutex                *sync.Mutex
-	acmeauthDomainsMutex *sync.Mutex
-	acmeAuthDomains      map[string]time.Time
+	mutex            *sync.Mutex
+	authDomainsMutex *sync.Mutex
+	authDomains      map[string]time.Time
+}
+
+func (this *acmeStruct) authDomainPut(domain string) {
+	this.authDomainsMutex.Lock()
+	defer this.authDomainsMutex.Unlock()
+
+	logrus.Debug("Put acme auth domain:", domain)
+	this.authDomains[domain] = time.Now().Add(SNI01_EXPIRE_TOKEN)
+}
+func (this *acmeStruct) authDomainCheck(domain string)bool {
+	this.authDomainsMutex.Lock()
+	defer this.authDomainsMutex.Unlock()
+
+	logrus.Debug("Check acme auth domain:", domain)
+	_, ok := this.authDomains[domain]
+	return ok
+}
+
+func (this *acmeStruct) authDomainDelete(domain string) {
+	this.authDomainsMutex.Lock()
+	defer this.authDomainsMutex.Unlock()
+
+	logrus.Debug("Delete acme auth domain:", domain)
+	delete(this.authDomains, domain)
 }
 
 func (this *acmeStruct) Init() {
@@ -42,8 +69,8 @@ func (this *acmeStruct) Init() {
 
 	this.mutex = &sync.Mutex{}
 
-	this.acmeauthDomainsMutex = &sync.Mutex{}
-	this.acmeAuthDomains = make(map[string]time.Time)
+	this.authDomainsMutex = &sync.Mutex{}
+	this.authDomains = make(map[string]time.Time)
 	this.CleanupTimer()
 }
 
@@ -67,9 +94,9 @@ func (this *acmeStruct) Cleanup() {
 	defer this.mutex.Unlock()
 
 	now := time.Now()
-	for token, expire := range this.acmeAuthDomains {
+	for token, expire := range this.authDomains {
 		if expire.Before(now) {
-			delete(this.acmeAuthDomains, token)
+			delete(this.authDomains, token)
 		}
 	}
 }
@@ -81,9 +108,9 @@ func (this *acmeStruct) CleanupTimer() {
 
 func (this *acmeStruct) CreateCertificate(domain string) (cert *tls.Certificate, err error) {
 	// Check suffix for avoid mutex sync in DeleteAcmeAuthDomain
-	if strings.HasSuffix(domain, ".acme.invalid") {
+	if strings.HasSuffix(domain, ACME_DOMAIN_SUFFIX) {
 		logrus.Debugf("Detect auth-domain mode for domain '%v'", domain)
-		if this.DeleteAcmeAuthDomain(domain) {
+		if this.authDomainCheck(domain) {
 			logrus.Debugf("Return self-signed certificate for domain '%v'", domain)
 			return this.createCertificateSelfSigned(domain)
 		} else {
@@ -126,6 +153,7 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 	defer cancelFunc()
 
 	for i := 0; i < TRY_COUNT; i++ {
+		logrus.Debugf("Create new authorization for domain '%v'", domain)
 		auth, err = this.client.NewAuthorization(domain, ctx)
 		if err == nil {
 			break
@@ -170,17 +198,20 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 		logrus.Errorf("Can't create acme domain for domain '%v' token '%v': %v", domain, challenge.Token, err)
 		return nil, errors.New("Can't create acme domain")
 	}
-	this.PutAcmeAuthDomain(acmeHostName)
+	this.authDomainPut(acmeHostName)
+	defer this.authDomainDelete(acmeHostName)
 
+	logrus.Debugf("Create challenge response for domain '%v'", domain)
 	challengeResponse, err := acmeutils.ChallengeResponseJSON(this.privateKey, challenge.Token, challenge.Type)
 	if err == nil {
-		logrus.Debugf("Create challenge response for domain '%v'", domain)
+		//pass
 	} else {
 		logrus.Errorf("Can't create challenge response for domain '%v', token '%v', challenge type %v: %v",
 			domain, challenge.Token, challenge.Type, err)
 		return nil, errors.New("Can't create challenge response")
 	}
 	for i := 0; i < TRY_COUNT; i++ {
+		logrus.Debugf("Respond to challenge for domain '%v'", domain)
 		err = this.client.RespondToChallenge(challenge, challengeResponse, this.privateKey, ctx)
 		if err == nil {
 			break
@@ -197,14 +228,17 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 	}
 
 	for i := 0; i < TRY_COUNT; i++ {
+		logrus.Debugf("Load challenge for domain '%v'", domain)
 		err = this.client.LoadChallenge(challenge, ctx)
-		if err != nil {
+		if err == nil {
+			break
+		} else {
 			logrus.Infof("Can't load challenge for domain '%v': %v", domain, err)
 			time.Sleep(RETRY_SLEEP)
 		}
 	}
 	if err == nil {
-		logrus.Debugf("Load challenge for domain '%v'", domain)
+		// pass
 	} else {
 		logrus.Errorf("Can't load challenge for domain '%v': %v", domain, err)
 		return nil, errors.New("Can't load challenge")
@@ -225,9 +259,10 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 		Subject:            pkix.Name{CommonName: domain},
 		DNSNames:           []string{domain},
 	}
+	logrus.Debugf("Create CSR for domain '%v'", domain)
 	csrDER, err := x509.CreateCertificateRequest(cryptorand.Reader, certRequest, certKey)
 	if err == nil {
-		logrus.Debugf("Create CSR for domain '%v'", domain)
+		logrus.Debugf("Created CSR for domain '%v'", domain)
 	} else {
 		logrus.Errorf("Can't create csr for domain '%v': %v", domain, err)
 		return nil, errors.New("Can't create csr")
@@ -235,9 +270,12 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 
 	var certResponse *acmeapi.Certificate
 	for i := 0; i < TRY_COUNT; i++ {
+		logrus.Debugf("Certificate request for domain '%v'", domain)
 		certResponse, err = this.client.RequestCertificate(csrDER, ctx)
-		if err != nil {
-			logrus.Infof("Can't get certificate for domain '%v': %v", domain, err)
+		if err == nil {
+			break
+		}else {
+			logrus.Infof("Can't get certificate for domain '%v': %v (response: %#v)", domain, err, certResponse)
 			time.Sleep(RETRY_SLEEP)
 		}
 	}
@@ -247,32 +285,40 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 		logrus.Errorf("Can't get certificate for domain '%v': %v", domain, err)
 		return nil, errors.New("Can't request certificate")
 	}
-	cert = &tls.Certificate{}
-	cert.Certificate = [][]byte{certResponse.Certificate}
-	fmt.Printf("CERT:\n%s\n", certResponse.Certificate)
-	cert.Leaf, err = x509.ParseCertificate(certResponse.Certificate)
-	if err == nil {
-		logrus.Debugf("Parse certificate for domain '%v'", domain)
-	} else {
-		logrus.Errorf("Can't parse certificate for domain '%v':%v", domain, err)
-		return nil, errors.New("Can't parse certificate")
-	}
-	fmt.Printf("CERT PARSED\n%#v\n", cert)
 
 	pemEncode := func(b []byte, t string) []byte {
 		return pem.EncodeToMemory(&pem.Block{Bytes: b, Type: t})
 	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Bytes: certResponse.Certificate, Type: "CERTIFICATE"})
-	fmt.Printf("CERT PEM:\n%s\n", certPEM)
+	for _, extraCert := range certResponse.ExtraCertificates {
+		extraCertPEM := pem.EncodeToMemory(&pem.Block{Bytes: extraCert, Type: "CERTIFICATE"})
+		certPEM = append(certPEM, '\n')
+		certPEM = append(certPEM, extraCertPEM...)
+	}
+	logrus.Debugf("CERT PEM:\n%s", certPEM)
 	certKeyPEM := pemEncode(x509.MarshalPKCS1PrivateKey(certKey), "RSA PRIVATE KEY")
 
-	certV, err := tls.X509KeyPair(certPEM, certKeyPEM)
+	tmpCert, err := tls.X509KeyPair(certPEM, certKeyPEM)
+	logrus.Debugf("Parsed cert count for domain '%v':", len(tmpCert.Certificate))
 	if err == nil {
-		logrus.Infof("Cert for domain '%v' parsed.", domain)
-		cert = &certV
+		logrus.Infof("Cert parsed for domain '%v'", domain)
+		cert = &tmpCert
 	} else {
 		logrus.Errorf("Can't parse cert for domain '%v': %v", domain, err)
 		return nil, errors.New("Can't parse cert for domain")
+	}
+
+	if len(cert.Certificate) > 0 {
+		cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
+		if err == nil {
+			logrus.Debugf("Leaf certificate parsed from domain '%v'", domain)
+		} else {
+			logrus.Errorf("Can't parse leaf certificate for domain '%v': %v", domain, err)
+			cert.Leaf = nil
+		}
+	} else {
+		logrus.Errorf("Certificate for domain doesn't contain certificates '%v'", domain)
+		return nil, errors.New("Certificate for domain doesn't contain certificates")
 	}
 
 	return cert, nil
@@ -289,24 +335,4 @@ func (this *acmeStruct) createCertificateSelfSigned(domain string) (cert *tls.Ce
 	cert.Certificate = [][]byte{derCert}
 	cert.PrivateKey = privateKey
 	return cert, nil
-}
-
-func (this *acmeStruct) PutAcmeAuthDomain(domain string) {
-	this.acmeauthDomainsMutex.Lock()
-	defer this.acmeauthDomainsMutex.Unlock()
-
-	logrus.Debug("Put acme auth domain:", domain)
-	this.acmeAuthDomains[domain] = time.Now().Add(SNI01_EXPIRE_TOKEN)
-}
-
-func (this *acmeStruct) DeleteAcmeAuthDomain(domain string) bool {
-	this.acmeauthDomainsMutex.Lock()
-	defer this.acmeauthDomainsMutex.Unlock()
-
-	logrus.Debug("Delete acme auth domain:", domain)
-	_, ok := this.acmeAuthDomains[domain]
-	if ok {
-		delete(this.acmeAuthDomains, domain)
-	}
-	return ok
 }

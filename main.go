@@ -1,26 +1,27 @@
 package main
 
 import (
+	"context"
+	cryptorand "crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"flag"
 	"github.com/Sirupsen/logrus"
+	"github.com/hashicorp/golang-lru"
 	"io"
 	"log"
 	"net"
 	"strings"
 	"time"
-	"crypto/rsa"
-	cryptorand "crypto/rand"
-	"context"
 )
 
 const (
 	LETSENCRYPT_CREATE_CERTIFICATE_TIMEOUT = time.Minute
 	LETSENCRYPT_PRODUCTION_API_URL         = "https://acme-v01.api.letsencrypt.org/directory"
 	LETSENCRYPT_STAGING_API_URL            = "https://acme-staging.api.letsencrypt.org/directory"
-	PRIVATE_KEY_BITS=2048
-	TRY_COUNT = 10
-	RETRY_SLEEP = time.Second
+	PRIVATE_KEY_BITS                       = 2048
+	TRY_COUNT                              = 10
+	RETRY_SLEEP                            = time.Second*5
 )
 
 var (
@@ -29,6 +30,8 @@ var (
 	targetConnTimeout = flag.Duration("target-conn-timeout", time.Second, "")
 	acmeApiUrl        = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
 	acmeTestServer    = flag.Bool("test", false, "Use test lets encrypt server instead of <acme-server>")
+	certDir           = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
+	certMemCount      = flag.Int("in-memory-cnt", 10000, "How many count of certs cache in memory for prevent parse it from file")
 )
 
 var (
@@ -36,7 +39,7 @@ var (
 	acmeService *acmeStruct
 )
 
-type stateStruct struct{
+type stateStruct struct {
 	PrivateKey *rsa.PrivateKey
 }
 
@@ -49,6 +52,19 @@ func main() {
 	logrus.SetLevel(logrus.DebugLevel)
 	localIPs = getLocalIPs()
 	acmeService = &acmeStruct{}
+	if *certMemCount > 0 {
+		logrus.Infof("Create memory cache for '%v' certificates", *certMemCount)
+		certMemCache, err = lru.New(*certMemCount)
+		if err != nil {
+			logrus.Errorf("Can't create memory cache:", err)
+			certMemCache = nil
+		}
+	} else {
+		logrus.Info("Memory cache turned off")
+	}
+	if *certDir == "-"{
+		*certDir=""
+	}
 
 	// init service
 	acmeService = &acmeStruct{}
@@ -86,12 +102,34 @@ func main() {
 	}
 }
 
-func certificateGet(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, err error) {
 	domain := strings.ToLower(clientHello.ServerName)
 	if logrus.GetLevel() >= logrus.DebugLevel {
 		logrus.Debugf("Required certificate for domain '%v'", domain)
 	}
-	return acmeService.CreateCertificate(domain)
+
+	if strings.HasSuffix(domain, ACME_DOMAIN_SUFFIX) {
+		// force generate new certificate, without caching.
+		return acmeService.CreateCertificate(domain)
+	}
+
+	cert = certificateCacheGet(domain)
+
+	switch {
+	case cert != nil && cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now()):
+		logrus.Warnf("Expired certificate got from cache for domain '%v'", domain)
+		// pass to create new certificate.
+	case cert != nil:
+		return cert, nil
+	default:
+		// pass
+	}
+
+	cert, err = acmeService.CreateCertificate(domain)
+	if err == nil {
+		certificateCachePut(domain, cert)
+	}
+	return cert, err
 }
 
 func handleTcpConnection(in *net.TCPConn) {
@@ -104,7 +142,7 @@ func handleTcpConnection(in *net.TCPConn) {
 	// handle ssl
 	tlsConfig := tls.Config{
 		GetCertificate: certificateGet,
-		MinVersion:tls.VersionSSL30,
+		MinVersion:     tls.VersionSSL30,
 	}
 	tlsConn := tls.Server(in, &tlsConfig)
 	err = tlsConn.Handshake()
@@ -141,7 +179,7 @@ func getLocalIPs() (res []net.IP) {
 	if logrus.GetLevel() >= logrus.InfoLevel {
 		ipStrings := make([]string, len(res))
 		for i, addr := range res {
-			ipStrings[i] =addr.String()
+			ipStrings[i] = addr.String()
 		}
 		logrus.Info("Local ip:", ipStrings)
 	}

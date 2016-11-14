@@ -17,7 +17,7 @@ go build -o http-ok gitlab/http-ok.go
 sleep 1
 
 echo "Test http-ok: "
-curl http://localhost
+curl http://localhost 2>/dev/null
 echo
 
 DOMAIN="gitlab-test.1gb.ru"
@@ -37,8 +37,30 @@ echo MY IPv6: ${MY_IPv6}
 go build -o proxy github.com/rekby/lets-proxy
 
 ./proxy --test &
+#./proxy &  ## REAL CERT. WARNING - LIMITED CERT REQUEST
+
 sleep 10 # Allow to start, generate keys, etc.
 
 TEST=`curl -vk https://${TMP_DOMAIN}`
+
+echo "Delete record"
+ID=`./ypdd ${DOMAIN} list | grep ${TMP_SUBDOMAIN} | cut -d ' ' -f 1`
+echo "ID: $ID"
+./ypdd $DOMAIN del $ID
+
 ( test "$TEST" == "OK" && echo OK ) || ( echo FAIL && exit 1)
+
+echo -n "Test cache file exists: "
+if grep -q CERTIFICATE certificates/${TMP_DOMAIN}.crt && grep -q PRIVATE certificates/${TMP_DOMAIN}.key; then
+    echo "OK"
+else
+    echo "FAIL"
+    echo
+    echo certificates/${TMP_DOMAIN}.crt
+    cat certificates/${TMP_DOMAIN}.crt
+    echo
+    echo certificates/${TMP_DOMAIN}.key
+    cat certificates/${TMP_DOMAIN}.key
+    exit 1
+fi
 

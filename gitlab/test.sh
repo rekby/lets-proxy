@@ -42,9 +42,21 @@ sleep 10 # Allow to start, generate keys, etc.
 TEST=`curl -vk https://${TMP_DOMAIN}`
 
 echo "Delete record"
-ID=`./ypdd $DOMAIN list | grep $TMP_SUBDOMAIN | cut -d ' ' -f 1`
+ID=`./ypdd ${DOMAIN} list | grep ${TMP_SUBDOMAIN} | cut -d ' ' -f 1`
 echo "ID: $ID"
 ./ypdd $DOMAIN del $ID
 
 ( test "$TEST" == "OK" && echo OK ) || ( echo FAIL && exit 1)
 
+echo -n "Test cache file exists: "
+if grep -q CERTIFICATE cert-dir/${TMP_DOMAIN}.crt && grep -q PRIVATE cert-dir/${TMP_DOMAIN}.key; then
+    echo "OK"
+else
+    echo "FAIL"
+    echo
+    echo cert-dir/${TMP_DOMAIN}.crt
+    cat cert-dir/${TMP_DOMAIN}.crt
+    echo
+    echo cert-dir/${TMP_DOMAIN}.key
+    cat cert-dir/${TMP_DOMAIN}.key
+fi

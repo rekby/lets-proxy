@@ -60,3 +60,4 @@ else
     echo certificates/${TMP_DOMAIN}.key
     cat certificates/${TMP_DOMAIN}.key
 fi
+

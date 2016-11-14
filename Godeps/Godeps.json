@@ -9,6 +9,14 @@
 			"Rev": "abc6f20dabf4b10195f233ad21ea6c5ba33acae0"
 		},
 		{
+			"ImportPath": "github.com/hashicorp/golang-lru",
+			"Rev": "0a025b7e63adc15a622f29b0b2c4c3848243bbf6"
+		},
+		{
+			"ImportPath": "github.com/hashicorp/golang-lru/simplelru",
+			"Rev": "0a025b7e63adc15a622f29b0b2c4c3848243bbf6"
+		},
+		{
 			"ImportPath": "github.com/hlandau/acme/acmeapi",
 			"Comment": "v0.0.58-9-ga087733",
 			"Rev": "a087733bf7567b224b8d192e2747f794fc93a27c"

@@ -98,13 +98,14 @@ func certificateCacheGet(domain string) *tls.Certificate {
 		return nil
 	}
 	keyPath := filepath.Join(*certDir, domain+".key")
-	certPath := filepath.Join(*certDir, domain+"crt")
+	certPath := filepath.Join(*certDir, domain+".crt")
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
 
 	switch {
 	case err == nil:
 		logrus.Debugf("Certificate files readed for domain '%v'", domain)
 	case os.IsNotExist(err):
+		logrus.Debugf("Certificate cache path key: '%v', cert: '%v'", keyPath, certPath)
 		logrus.Infof("Have no certificate/key in cert-dir for domain '%v'", domain)
 		return nil
 	default:
@@ -118,7 +119,7 @@ func certificateCacheGet(domain string) *tls.Certificate {
 	}
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err == nil {
-		logrus.Debugf("Certificate parsed for domain '%v'")
+		logrus.Debugf("Certificate parsed for domain '%v'", domain)
 		return &cert
 	} else {
 		logrus.Errorf("Can't parse certificate for domain '%v': %v", domain, err)
@@ -127,6 +128,7 @@ func certificateCacheGet(domain string) *tls.Certificate {
 }
 
 func certificateCachePut(domain string, cert *tls.Certificate) {
+	logrus.Infof("Certificate put to cache for domain '%v'", domain)
 	if *certDir == "" {
 		logrus.Debugf("Skip certificateCachePut becouse certDir is empty")
 		return
@@ -204,9 +206,15 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 	}
 
 	cert = certificateCacheGet(domain)
-	if cert != nil && cert.Leaf.NotAfter.Before(time.Now()) {
+
+	switch {
+	case cert != nil && cert.Leaf.NotAfter.Before(time.Now()):
 		logrus.Warnf("Expired certificate got from cache for domain '%v'", domain)
+		// pass to create new certificate.
+	case cert != nil:
 		return cert, nil
+	default:
+		// pass
 	}
 
 	cert, err = acmeService.CreateCertificate(domain)

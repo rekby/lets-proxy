@@ -37,7 +37,7 @@ echo MY IPv6: ${MY_IPv6}
 go build -o proxy github.com/rekby/lets-proxy
 
 #./proxy --test &
-/proxy &
+./proxy &
 
 sleep 10 # Allow to start, generate keys, etc.
 

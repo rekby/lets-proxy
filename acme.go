@@ -28,13 +28,37 @@ const (
 )
 
 type acmeStruct struct {
-	serverAddress string
-	privateKey    *rsa.PrivateKey
-	client        *acmeapi.Client
+	serverAddress    string
+	privateKey       *rsa.PrivateKey
+	client           *acmeapi.Client
 
-	mutex                *sync.Mutex
-	acmeauthDomainsMutex *sync.Mutex
-	acmeAuthDomains      map[string]time.Time
+	mutex            *sync.Mutex
+	authDomainsMutex *sync.Mutex
+	authDomains      map[string]time.Time
+}
+
+func (this *acmeStruct) authDomainPut(domain string) {
+	this.authDomainsMutex.Lock()
+	defer this.authDomainsMutex.Unlock()
+
+	logrus.Debug("Put acme auth domain:", domain)
+	this.authDomains[domain] = time.Now().Add(SNI01_EXPIRE_TOKEN)
+}
+func (this *acmeStruct) authDomainCheck(domain string)bool {
+	this.authDomainsMutex.Lock()
+	defer this.authDomainsMutex.Unlock()
+
+	logrus.Debug("Check acme auth domain:", domain)
+	_, ok := this.authDomains[domain]
+	return ok
+}
+
+func (this *acmeStruct) authDomainDelete(domain string) {
+	this.authDomainsMutex.Lock()
+	defer this.authDomainsMutex.Unlock()
+
+	logrus.Debug("Delete acme auth domain:", domain)
+	delete(this.authDomains, domain)
 }
 
 func (this *acmeStruct) Init() {
@@ -45,8 +69,8 @@ func (this *acmeStruct) Init() {
 
 	this.mutex = &sync.Mutex{}
 
-	this.acmeauthDomainsMutex = &sync.Mutex{}
-	this.acmeAuthDomains = make(map[string]time.Time)
+	this.authDomainsMutex = &sync.Mutex{}
+	this.authDomains = make(map[string]time.Time)
 	this.CleanupTimer()
 }
 
@@ -70,9 +94,9 @@ func (this *acmeStruct) Cleanup() {
 	defer this.mutex.Unlock()
 
 	now := time.Now()
-	for token, expire := range this.acmeAuthDomains {
+	for token, expire := range this.authDomains {
 		if expire.Before(now) {
-			delete(this.acmeAuthDomains, token)
+			delete(this.authDomains, token)
 		}
 	}
 }
@@ -86,7 +110,7 @@ func (this *acmeStruct) CreateCertificate(domain string) (cert *tls.Certificate,
 	// Check suffix for avoid mutex sync in DeleteAcmeAuthDomain
 	if strings.HasSuffix(domain, ACME_DOMAIN_SUFFIX) {
 		logrus.Debugf("Detect auth-domain mode for domain '%v'", domain)
-		if this.DeleteAcmeAuthDomain(domain) {
+		if this.authDomainCheck(domain) {
 			logrus.Debugf("Return self-signed certificate for domain '%v'", domain)
 			return this.createCertificateSelfSigned(domain)
 		} else {
@@ -173,7 +197,8 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 		logrus.Errorf("Can't create acme domain for domain '%v' token '%v': %v", domain, challenge.Token, err)
 		return nil, errors.New("Can't create acme domain")
 	}
-	this.PutAcmeAuthDomain(acmeHostName)
+	this.authDomainPut(acmeHostName)
+	defer this.authDomainDelete(acmeHostName)
 
 	challengeResponse, err := acmeutils.ChallengeResponseJSON(this.privateKey, challenge.Token, challenge.Type)
 	if err == nil {
@@ -287,24 +312,4 @@ func (this *acmeStruct) createCertificateSelfSigned(domain string) (cert *tls.Ce
 	cert.Certificate = [][]byte{derCert}
 	cert.PrivateKey = privateKey
 	return cert, nil
-}
-
-func (this *acmeStruct) PutAcmeAuthDomain(domain string) {
-	this.acmeauthDomainsMutex.Lock()
-	defer this.acmeauthDomainsMutex.Unlock()
-
-	logrus.Debug("Put acme auth domain:", domain)
-	this.acmeAuthDomains[domain] = time.Now().Add(SNI01_EXPIRE_TOKEN)
-}
-
-func (this *acmeStruct) DeleteAcmeAuthDomain(domain string) bool {
-	this.acmeauthDomainsMutex.Lock()
-	defer this.acmeauthDomainsMutex.Unlock()
-
-	logrus.Debug("Delete acme auth domain:", domain)
-	_, ok := this.acmeAuthDomains[domain]
-	if ok {
-		delete(this.acmeAuthDomains, domain)
-	}
-	return ok
 }

@@ -1,5 +1,8 @@
 package main
 
+// from time to time see https://godoc.org/golang.org/x/crypto/acme/autocert
+// it isn't ready for usage now, but can simple code in future.
+
 import (
 	"crypto/rsa"
 
@@ -21,6 +24,7 @@ import (
 
 const (
 	SNI01_EXPIRE_TOKEN time.Duration = time.Minute * 10
+	ACME_DOMAIN_SUFFIX = ".acme.invalid"
 )
 
 type acmeStruct struct {
@@ -80,7 +84,7 @@ func (this *acmeStruct) CleanupTimer() {
 
 func (this *acmeStruct) CreateCertificate(domain string) (cert *tls.Certificate, err error) {
 	// Check suffix for avoid mutex sync in DeleteAcmeAuthDomain
-	if strings.HasSuffix(domain, ".acme.invalid") {
+	if strings.HasSuffix(domain, ACME_DOMAIN_SUFFIX) {
 		logrus.Debugf("Detect auth-domain mode for domain '%v'", domain)
 		if this.DeleteAcmeAuthDomain(domain) {
 			logrus.Debugf("Return self-signed certificate for domain '%v'", domain)

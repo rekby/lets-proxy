@@ -49,14 +49,14 @@ echo "ID: $ID"
 ( test "$TEST" == "OK" && echo OK ) || ( echo FAIL && exit 1)
 
 echo -n "Test cache file exists: "
-if grep -q CERTIFICATE cert-dir/${TMP_DOMAIN}.crt && grep -q PRIVATE cert-dir/${TMP_DOMAIN}.key; then
+if grep -q CERTIFICATE certificates/${TMP_DOMAIN}.crt && grep -q PRIVATE certificates/${TMP_DOMAIN}.key; then
     echo "OK"
 else
     echo "FAIL"
     echo
-    echo cert-dir/${TMP_DOMAIN}.crt
-    cat cert-dir/${TMP_DOMAIN}.crt
+    echo certificates/${TMP_DOMAIN}.crt
+    cat certificates/${TMP_DOMAIN}.crt
     echo
-    echo cert-dir/${TMP_DOMAIN}.key
-    cat cert-dir/${TMP_DOMAIN}.key
+    echo certificates/${TMP_DOMAIN}.key
+    cat certificates/${TMP_DOMAIN}.key
 fi

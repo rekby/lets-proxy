@@ -272,7 +272,9 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 	for i := 0; i < TRY_COUNT; i++ {
 		logrus.Debugf("Certificate request for domain '%v'", domain)
 		certResponse, err = this.client.RequestCertificate(csrDER, ctx)
-		if err != nil {
+		if err == nil {
+			break
+		}else {
 			logrus.Infof("Can't get certificate for domain '%v': %v (response: %#v)", domain, err, certResponse)
 			time.Sleep(RETRY_SLEEP)
 		}

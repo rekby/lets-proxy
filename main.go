@@ -30,7 +30,7 @@ var (
 	targetConnTimeout = flag.Duration("target-conn-timeout", time.Second, "")
 	acmeApiUrl        = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
 	acmeTestServer    = flag.Bool("test", false, "Use test lets encrypt server instead of <acme-server>")
-	certDir           = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir="" for disable save certs`)
+	certDir           = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
 	certMemCount      = flag.Int("in-memory-cnt", 10000, "How many count of certs cache in memory for prevent parse it from file")
 )
 
@@ -52,10 +52,18 @@ func main() {
 	logrus.SetLevel(logrus.DebugLevel)
 	localIPs = getLocalIPs()
 	acmeService = &acmeStruct{}
-	certMemCache, err = lru.New(*certMemCount)
-	if err != nil {
-		logrus.Errorf("Can't create memory cache:", err)
-		certMemCache = nil
+	if *certMemCount > 0 {
+		logrus.Infof("Create memory cache for '%v' certificates", *certMemCount)
+		certMemCache, err = lru.New(*certMemCount)
+		if err != nil {
+			logrus.Errorf("Can't create memory cache:", err)
+			certMemCache = nil
+		}
+	} else {
+		logrus.Info("Memory cache turned off")
+	}
+	if *certDir == "-"{
+		*certDir=""
 	}
 
 	// init service

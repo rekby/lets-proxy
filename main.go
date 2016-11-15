@@ -72,7 +72,7 @@ func main() {
 			cutHeaders = append(realIPHeaderNames, []byte(strings.ToUpper(line)))
 		}
 	}
-	cutHeaders = append(cutHeaders, []byte("HOST"))
+	cutHeaders = append(cutHeaders, []byte("CONNECTION"))
 
 	localIPs = getLocalIPs()
 	acmeService = &acmeStruct{}

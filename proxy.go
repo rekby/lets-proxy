@@ -124,6 +124,7 @@ func proxyHTTPHeaders(targetConn net.Conn, sourceConn net.Conn) {
 
 			headerBuf := bytes.NewBuffer(buf)
 			headerBuf.Reset()
+			headerBuf.WriteString("Connection: close\r\n")
 
 			// Write real IP
 			for _, header := range realIPHeaderNames {

@@ -5,17 +5,17 @@ import (
 	cryptorand "crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/golang-lru"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"strings"
 	"time"
-	"encoding/json"
-	"io/ioutil"
-	"os"
 )
 
 const (
@@ -24,8 +24,8 @@ const (
 	LETSENCRYPT_STAGING_API_URL            = "https://acme-staging.api.letsencrypt.org/directory"
 	PRIVATE_KEY_BITS                       = 2048
 	TRY_COUNT                              = 10
-	RETRY_SLEEP                            = time.Second*5
-	STATE_FILEMODE = 0600
+	RETRY_SLEEP                            = time.Second * 5
+	STATE_FILEMODE                         = 0600
 )
 
 var (
@@ -36,7 +36,7 @@ var (
 	acmeTestServer    = flag.Bool("test", false, "Use test lets encrypt server instead of <acme-server>")
 	certDir           = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
 	certMemCount      = flag.Int("in-memory-cnt", 10000, "How many count of certs cache in memory for prevent parse it from file")
-	stateFilePath = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
+	stateFilePath     = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
 )
 
 var (
@@ -46,7 +46,7 @@ var (
 
 type stateStruct struct {
 	PrivateKey *rsa.PrivateKey
-	changed bool
+	changed    bool
 }
 
 func main() {
@@ -68,8 +68,8 @@ func main() {
 	} else {
 		logrus.Info("Memory cache turned off")
 	}
-	if *certDir == "-"{
-		*certDir=""
+	if *certDir == "-" {
+		*certDir = ""
 	}
 
 	// init service
@@ -224,7 +224,7 @@ func getTargetConn(in *net.TCPConn) (net.TCPAddr, error) {
 	return *targetAddrP, nil
 }
 
-func saveState(state stateStruct){
+func saveState(state stateStruct) {
 	if state.changed {
 		logrus.Infof("Saving state to '%v'", *stateFilePath)
 	} else {
@@ -236,18 +236,18 @@ func saveState(state stateStruct){
 		logrus.Errorf("Can't save state to file '%v': %v", *stateFilePath, err)
 		return
 	}
-	err = ioutil.WriteFile(*stateFilePath + ".new", stateBytes, STATE_FILEMODE)
+	err = ioutil.WriteFile(*stateFilePath+".new", stateBytes, STATE_FILEMODE)
 	if err != nil {
-		logrus.Errorf("Error while write state bytes to file '%v': %v", *stateFilePath + ".new", err)
+		logrus.Errorf("Error while write state bytes to file '%v': %v", *stateFilePath+".new", err)
 		return
 	}
-	err = os.Rename(*stateFilePath, *stateFilePath + ".old")
+	err = os.Rename(*stateFilePath, *stateFilePath+".old")
 	if err != nil {
-		logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath, *stateFilePath + ".old", err)
+		logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath, *stateFilePath+".old", err)
 	}
-	err = os.Rename(*stateFilePath + ".new", *stateFilePath)
+	err = os.Rename(*stateFilePath+".new", *stateFilePath)
 	if err != nil {
-		logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath + ".new", *stateFilePath, err)
+		logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath+".new", *stateFilePath, err)
 	}
 }
 

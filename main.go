@@ -9,7 +9,6 @@ import (
 	"flag"
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/golang-lru"
-	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -37,6 +36,7 @@ var (
 	certDir           = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
 	certMemCount      = flag.Int("in-memory-cnt", 10000, "How many count of certs cache in memory for prevent parse it from file")
 	stateFilePath     = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
+	proxyMode         = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
 )
 
 var (
@@ -56,6 +56,12 @@ func main() {
 
 	// Init
 	logrus.SetLevel(logrus.DebugLevel)
+
+	if *proxyMode != "http" && *proxyMode != "tcp" {
+		logrus.Panicf("Unknow proxy mode: %v", *proxyMode)
+	}
+	logrus.Info("Proxy mode: %v", *proxyMode)
+
 	localIPs = getLocalIPs()
 	acmeService = &acmeStruct{}
 	if *certMemCount > 0 {
@@ -249,26 +255,4 @@ func saveState(state stateStruct) {
 	if err != nil {
 		logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath+".new", *stateFilePath, err)
 	}
-}
-
-func startProxy(targetAddr net.TCPAddr, in net.Conn) {
-	logrus.Infof("Start proxy connection from '%v' to'%v'", in.RemoteAddr().String(), targetAddr.String())
-
-	targetConnCommon, err := net.DialTimeout("tcp", targetAddr.String(), *targetConnTimeout)
-	if err != nil {
-		logrus.Warnf("Can't connect to target '%v': %v", targetAddr.String(), err)
-		return
-	}
-
-	targetConn := targetConnCommon.(*net.TCPConn)
-	go func() {
-		io.Copy(in, targetConn)
-		in.Close()
-		targetConn.Close()
-	}()
-	go func() {
-		io.Copy(targetConn, in)
-		in.Close()
-		targetConn.Close()
-	}()
 }

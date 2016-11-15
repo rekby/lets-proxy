@@ -1,2 +1,6 @@
 .idea/
 lets-proxy.iml
+state.json
+certificates/
+gitlab/http-ok.exe
+

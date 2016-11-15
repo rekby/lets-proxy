@@ -13,6 +13,9 @@ import (
 	"net"
 	"strings"
 	"time"
+	"encoding/json"
+	"io/ioutil"
+	"os"
 )
 
 const (
@@ -22,6 +25,7 @@ const (
 	PRIVATE_KEY_BITS                       = 2048
 	TRY_COUNT                              = 10
 	RETRY_SLEEP                            = time.Second*5
+	STATE_FILEMODE = 0600
 )
 
 var (
@@ -32,6 +36,7 @@ var (
 	acmeTestServer    = flag.Bool("test", false, "Use test lets encrypt server instead of <acme-server>")
 	certDir           = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
 	certMemCount      = flag.Int("in-memory-cnt", 10000, "How many count of certs cache in memory for prevent parse it from file")
+	stateFilePath = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
 )
 
 var (
@@ -41,6 +46,7 @@ var (
 
 type stateStruct struct {
 	PrivateKey *rsa.PrivateKey
+	changed bool
 }
 
 func main() {
@@ -67,17 +73,39 @@ func main() {
 	}
 
 	// init service
+	var state stateStruct
+	stateBytes, err := ioutil.ReadFile(*stateFilePath)
+	if err == nil {
+		err = json.Unmarshal(stateBytes, &state)
+		if err != nil {
+			logrus.Errorf("Can't parse state file '%v': %v", *stateFilePath, err)
+		}
+	} else {
+		logrus.Errorf("Can't read state file '%v': %v", *stateFilePath, err)
+	}
+
 	acmeService = &acmeStruct{}
 	if *acmeTestServer {
 		acmeService.serverAddress = LETSENCRYPT_STAGING_API_URL
 	} else {
 		acmeService.serverAddress = *acmeApiUrl
 	}
-	logrus.Info("Generate private keys")
-	acmeService.privateKey, err = rsa.GenerateKey(cryptorand.Reader, PRIVATE_KEY_BITS)
-	if err != nil {
-		logrus.Panic("Can't generate private key")
+
+	if state.PrivateKey == nil {
+		logrus.Info("Generate private keys")
+		state.PrivateKey, err = rsa.GenerateKey(cryptorand.Reader, PRIVATE_KEY_BITS)
+		state.changed = true
+		if err != nil {
+			logrus.Panic("Can't generate private key")
+		}
+	} else {
+		logrus.Debugf("Skip generate keys - it was read from state")
 	}
+
+	saveState(state)
+
+	acmeService.privateKey = state.PrivateKey
+
 	acmeService.Init()
 	acmeService.RegisterEnsure(context.TODO())
 
@@ -194,6 +222,33 @@ func getTargetConn(in *net.TCPConn) (net.TCPAddr, error) {
 	}
 	targetAddrP.Port = *targetPort
 	return *targetAddrP, nil
+}
+
+func saveState(state stateStruct){
+	if state.changed {
+		logrus.Infof("Saving state to '%v'", *stateFilePath)
+	} else {
+		logrus.Debug("Skip save state becouse it isn't changed")
+		return
+	}
+	stateBytes, err := json.MarshalIndent(&state, "", "    ")
+	if err != nil {
+		logrus.Errorf("Can't save state to file '%v': %v", *stateFilePath, err)
+		return
+	}
+	err = ioutil.WriteFile(*stateFilePath + ".new", stateBytes, STATE_FILEMODE)
+	if err != nil {
+		logrus.Errorf("Error while write state bytes to file '%v': %v", *stateFilePath + ".new", err)
+		return
+	}
+	err = os.Rename(*stateFilePath, *stateFilePath + ".old")
+	if err != nil {
+		logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath, *stateFilePath + ".old", err)
+	}
+	err = os.Rename(*stateFilePath + ".new", *stateFilePath)
+	if err != nil {
+		logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath + ".new", *stateFilePath, err)
+	}
 }
 
 func startProxy(targetAddr net.TCPAddr, in net.Conn) {

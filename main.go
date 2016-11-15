@@ -191,7 +191,6 @@ func handleTcpConnection(in *net.TCPConn) {
 	}
 	tlsConn := tls.Server(in, &tlsConfig)
 	err = tlsConn.Handshake()
-
 	logrus.Debug("tls ciper:", tlsConn.ConnectionState().CipherSuite)
 	if err == nil {
 		logrus.Debug("Handshake for incoming:", tlsConn.RemoteAddr().String())
@@ -199,7 +198,7 @@ func handleTcpConnection(in *net.TCPConn) {
 		logrus.Infof("Error in tls handshake from '%v':%v", tlsConn.RemoteAddr(), err)
 	}
 
-	startProxy(target, tlsConn, tlsConn.ConnectionState().ServerName)
+	startProxy(target, tlsConn)
 }
 
 func getLocalIPs() (res []net.IP) {

@@ -36,7 +36,7 @@ func netbufPut(buf []byte) {
 	poolNetBuffers.Put(buf)
 }
 
-func startProxy(targetAddr net.TCPAddr, in net.Conn, domain string) {
+func startProxy(targetAddr net.TCPAddr, in net.Conn) {
 	targetConnCommon, err := net.DialTimeout("tcp", targetAddr.String(), *targetConnTimeout)
 	if err != nil {
 		logrus.Warnf("Can't connect to target '%v': %v", targetAddr.String(), err)
@@ -51,7 +51,7 @@ func startProxy(targetAddr net.TCPAddr, in net.Conn, domain string) {
 
 	switch *proxyMode {
 	case "http":
-		startProxyHTTP(targetConn, in, domain)
+		startProxyHTTP(targetConn, in)
 	case "tcp":
 		startProxyTCP(targetConn, in)
 	default:
@@ -59,7 +59,7 @@ func startProxy(targetAddr net.TCPAddr, in net.Conn, domain string) {
 	}
 }
 
-func startProxyHTTP(targetConn net.Conn, sourceConn net.Conn, domain string) {
+func startProxyHTTP(targetConn net.Conn, sourceConn net.Conn) {
 	logrus.Infof("Start http-proxy connection from '%v' to'%v'", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String())
 
 	// answer from server proxy without changes
@@ -73,7 +73,7 @@ func startProxyHTTP(targetConn net.Conn, sourceConn net.Conn, domain string) {
 		targetConn.Close()
 	}()
 
-	proxyHTTPHeaders(targetConn, sourceConn, domain)
+	proxyHTTPHeaders(targetConn, sourceConn)
 	go func() {
 		buf := netbufGet()
 		defer netbufPut(buf)
@@ -86,7 +86,7 @@ func startProxyHTTP(targetConn net.Conn, sourceConn net.Conn, domain string) {
 	}()
 }
 
-func proxyHTTPHeaders(targetConn net.Conn, sourceConn net.Conn, domain string) {
+func proxyHTTPHeaders(targetConn net.Conn, sourceConn net.Conn) {
 	buf := netbufGet()
 	defer netbufPut(buf)
 
@@ -124,10 +124,6 @@ func proxyHTTPHeaders(targetConn net.Conn, sourceConn net.Conn, domain string) {
 
 			headerBuf := bytes.NewBuffer(buf)
 			headerBuf.Reset()
-
-			// Write hostname
-			//headerBuf.WriteString("HOST:")
-			//headerBuf.WriteString(domain)
 
 			// Write real IP
 			for _, header := range realIPHeaderNames {

@@ -16,7 +16,6 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/hlandau/acme/acmeapi"
 	"github.com/hlandau/acme/acmeapi/acmeutils"
-	"net"
 	"strings"
 	"sync"
 	"time"
@@ -107,6 +106,15 @@ func (this *acmeStruct) CleanupTimer() {
 }
 
 func (this *acmeStruct) CreateCertificate(domain string) (cert *tls.Certificate, err error) {
+	ctx, cancelFunc := context.WithTimeout(context.Background(), LETSENCRYPT_CREATE_CERTIFICATE_TIMEOUT)
+	defer func() {
+		if ctx.Err() == nil {
+			cancelFunc() // cancel all background processes. In real life - nothing.
+		} else {
+			logrus.Infof("Can't create certificate by context for domain '%v': %v", ctx.Err())
+		}
+	}()
+
 	// Check suffix for avoid mutex sync in DeleteAcmeAuthDomain
 	if strings.HasSuffix(domain, ACME_DOMAIN_SUFFIX) {
 		logrus.Debugf("Detect auth-domain mode for domain '%v'", domain)
@@ -119,21 +127,18 @@ func (this *acmeStruct) CreateCertificate(domain string) (cert *tls.Certificate,
 		}
 	}
 
-	if !domainHasLocalIP(domain) {
+	if !domainHasLocalIP(ctx, domain) {
 		return nil, errors.New("Domain have ip of other server.")
 	}
 
-	return this.createCertificateAcme(domain)
+	return this.createCertificateAcme(ctx, domain)
 }
 
-func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certificate, err error) {
+func (this *acmeStruct) createCertificateAcme(ctx context.Context, domain string) (cert *tls.Certificate, err error) {
 	this.mutex.Lock()
 	defer this.mutex.Unlock()
 
 	var auth *acmeapi.Authorization
-
-	ctx, cancelFunc := context.WithTimeout(context.Background(), LETSENCRYPT_CREATE_CERTIFICATE_TIMEOUT)
-	defer cancelFunc()
 
 	for i := 0; i < TRY_COUNT; i++ {
 		logrus.Debugf("Create new authorization for domain '%v'", domain)
@@ -320,23 +325,3 @@ func (this *acmeStruct) createCertificateSelfSigned(domain string) (cert *tls.Ce
 	return cert, nil
 }
 
-func domainHasLocalIP(domain string) bool {
-	// check about we serve the domain
-	ips, err := net.LookupIP(domain)
-	if err != nil {
-		logrus.Warnf("Can't lookup ip for domain '%v': %v", domain, err)
-		return nil, errors.New("Can't lookup ip of the domain")
-	}
-	isLocalIP := false
-checkLocalIP:
-	for _, ip := range ips {
-		for _, localIP := range localIPs {
-			if ip.Equal(localIP) {
-				isLocalIP = true
-				break checkLocalIP
-			}
-		}
-	}
-	logrus.Debugf("Domain have ip of other server. Domain '%v', Domain ips: %v, Server ips: %v", domain, ips, localIPs)
-	return isLocalIP
-}

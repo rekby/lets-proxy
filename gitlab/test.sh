@@ -38,7 +38,7 @@ echo MY IPv6: ${MY_IPv6}
 
 go build -o proxy github.com/rekby/lets-proxy
 
-./proxy --test --real-ip-header=remote-ip,test-remote-ip --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https &
+./proxy --test --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https &
 #./proxy &  ## REAL CERT. WARNING - LIMITED CERT REQUEST
 
 sleep 10 # Allow to start, generate keys, etc.
@@ -48,11 +48,11 @@ TEST=`curl -vsk https://${TMP_DOMAIN}`
 echo "${TEST}"
 
 ( echo "$TEST" | grep -iq "HOST:" && echo HOST-OK ) || ( echo HOST-FAIL && exit 1 )
-( echo "$TEST" | grep -iq "remote-ip: ${MY_IPv6}" && echo HOST-OK ) || ( echo HOST-FAIL && exit 1 )
-( echo "$TEST" | grep -iq "test-remote-ip: ${MY_IPv6}" && echo HOST-OK ) || ( echo HOST-FAIL && exit 1 )
-( echo "$TEST" | grep -iq "https: on" && echo HOST-OK ) || ( echo HOST-FAIL && exit 1 )
-( echo "$TEST" | grep -iq "protohttps: on" && echo HOST-OK ) || ( echo HOST-FAIL && exit 1 )
-( echo "$TEST" | grep -iq "X-Forwarded-Proto: https" && echo HOST-OK ) || ( echo HOST-FAIL && exit 1 )
+( echo "$TEST" | grep -iq "remote-ip: ${MY_IPv6}" && echo REMOTE-IP-OK ) || ( echo REMOTE-IP-FAIL && exit 1 )
+( echo "$TEST" | grep -iq "test-remote: ${MY_IPv6}" && echo TEST-REMOTE-OK ) || ( echo TEST-REMOTE-FAIL && exit 1 )
+( echo "$TEST" | grep -iq "https: on" && echo HTTPS-OK ) || ( echo HTTPS-FAIL && exit 1 )
+( echo "$TEST" | grep -iq "protohttps: on" && echo PROTOHTTPS-OK ) || ( echo PROTOHTTPS-FAIL && exit 1 )
+( echo "$TEST" | grep -iq "X-Forwarded-Proto: https" && echo X-FORWARDED-PROTO-OK ) || ( echo X-FORWARDED-PROTO-FAIL && exit 1 )
 
 echo -n "Test cache file exists: "
 if grep -q CERTIFICATE certificates/${TMP_DOMAIN}.crt && grep -q PRIVATE certificates/${TMP_DOMAIN}.key; then

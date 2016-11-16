@@ -88,7 +88,7 @@ func main() {
 			buf.WriteString(headerParts[1])
 		}
 		buf.WriteString("\r\n")
-		additionalHeaders = buf.Bytes()
+		additionalHeaders = append(additionalHeaders, buf.Bytes()...)
 	}
 
 	localIPs = getLocalIPs()

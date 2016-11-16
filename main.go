@@ -39,7 +39,7 @@ var (
 	certMemCount           = flag.Int("in-memory-cnt", 10000, "How many count of certs cache in memory for prevent parse it from file")
 	stateFilePath          = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
 	proxyMode              = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
-	httpRealIPHeader       = flag.String("real-ip-header", "Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
+	httpRealIPHeader       = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
 	additionalHeadersParam = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Several headers separated by comma.")
 	logLevel               = flag.String("loglevel", "warning", "fatal|error|warning|info|debug")
 	logOutput              = flag.String("logout", "-", "Path to logout. Special: '-' (without quotes) - stderr")
@@ -61,8 +61,6 @@ type stateStruct struct {
 
 func main() {
 	var err error
-
-	flag.Usage = usage
 
 	flag.Parse()
 
@@ -328,8 +326,4 @@ func saveState(state stateStruct) {
 	if err != nil {
 		logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath+".new", *stateFilePath, err)
 	}
-}
-
-func usage() {
-
 }

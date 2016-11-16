@@ -36,21 +36,47 @@ MY_IPv6=`curl -s6 http://ifconfig.io/ip 2>/dev/null`
 echo MY IPv6: ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN} AAAA ${MY_IPv6}
 
+function delete_domain(){
+    echo "Delete record"
+    ID=`./ypdd ${DOMAIN} list | grep ${TMP_SUBDOMAIN} | cut -d ' ' -f 1`
+    echo "ID: $ID"
+    ./ypdd $DOMAIN del $ID
+}
+
 go build -o proxy github.com/rekby/lets-proxy
 
-./proxy --test &
+./proxy --test --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https &
 #./proxy &  ## REAL CERT. WARNING - LIMITED CERT REQUEST
 
 sleep 10 # Allow to start, generate keys, etc.
 
 TEST=`curl -vsk https://${TMP_DOMAIN}`
 
-echo "Delete record"
-ID=`./ypdd ${DOMAIN} list | grep ${TMP_SUBDOMAIN} | cut -d ' ' -f 1`
-echo "ID: $ID"
-./ypdd $DOMAIN del $ID
+echo "${TEST}"
 
-( echo "$TEST" | grep -q "HOST:" && echo OK ) || ( echo FAIL && exit 1)
+function test_or_exit(){
+    FULLTEXT="${TEST}"
+
+    NAME="$1"
+    SUBSTRING="$2"
+
+    if echo "${FULLTEXT}" | grep -qi "${SUBSTRING}"; then
+        echo "${NAME}-OK"
+        return
+    else
+        echo "${NAME}-FAIL"
+        delete_domain
+        exit 1
+    fi
+
+}
+
+test_or_exit "HOST" "HOST: ${TMP_DOMAIN}"
+test_or_exit "remote-ip" "remote-ip: ${MY_IPv6}"
+test_or_exit "test-remote" "test-remote: ${MY_IPv6}"
+test_or_exit "https" "https: on"
+test_or_exit "protohttps" "protohttps: on"
+test_or_exit "X-Forwarded-Proto" "X-Forwarded-Proto: https"
 
 echo -n "Test cache file exists: "
 if grep -q CERTIFICATE certificates/${TMP_DOMAIN}.crt && grep -q PRIVATE certificates/${TMP_DOMAIN}.key; then
@@ -63,5 +89,8 @@ else
     echo
     echo certificates/${TMP_DOMAIN}.key
     cat certificates/${TMP_DOMAIN}.key
+    delete_domain
     exit 1
 fi
+
+delete_domain

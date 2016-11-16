@@ -133,6 +133,7 @@ func proxyHTTPHeaders(targetConn net.Conn, sourceConn net.Conn) {
 				headerBuf.WriteString(remoteAddrString)
 				headerBuf.Write([]byte("\r\n"))
 			}
+			headerBuf.Write(additionalHeaders)
 			headerBuf.Write([]byte("\r\n")) // end http headers
 			logrus.Debugf("Add headers. '%v' -> '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), headerBuf.Bytes())
 

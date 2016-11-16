@@ -2,18 +2,18 @@ package main
 
 import (
 	"context"
-	"net"
-	"sync"
 	"github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
+	"net"
 	"strings"
+	"sync"
 )
 
 var (
-	localIPs    []net.IP
+	localIPs []net.IP
 )
 
-func getIPsFromDNS(ctx context.Context, domain, dnsServer string, recordType uint16)[]net.IP {
+func getIPsFromDNS(ctx context.Context, domain, dnsServer string, recordType uint16) []net.IP {
 	dnsClient := dns.Client{}
 
 	msg := dns.Msg{}
@@ -48,7 +48,7 @@ func getIPsFromDNS(ctx context.Context, domain, dnsServer string, recordType uin
 
 func domainHasLocalIP(ctx context.Context, domain string) bool {
 	var ipsChan = make(chan []net.IP, 1)
-	defer func(){
+	defer func() {
 		// clean channel
 		for range ipsChan {
 			// pass
@@ -58,11 +58,11 @@ func domainHasLocalIP(ctx context.Context, domain string) bool {
 	var dnsRequests = &sync.WaitGroup{}
 
 	dnsRequests.Add(1)
-	go func (){
+	go func() {
 		ips, err := net.LookupIP(domain)
 		if err == nil {
 			ipsChan <- ips
-		}else {
+		} else {
 			logrus.Warnf("Can't local lookup ip for domain '%v': %v", domain, err)
 		}
 		logrus.Debugf("Receive answer from local lookup for domain '%v' record type '%v' ips: '%v'", domain, ips)
@@ -70,28 +70,27 @@ func domainHasLocalIP(ctx context.Context, domain string) bool {
 	}()
 
 	domainForRequest := domain
-	if !strings.HasSuffix(domainForRequest, "."){
+	if !strings.HasSuffix(domainForRequest, ".") {
 		domainForRequest += "."
 	}
-	dnsq := func(server string){
+	dnsq := func(server string) {
 		dnsRequests.Add(2) // for A and AAAA requests
-		go func(){
+		go func() {
 			ipsChan <- getIPsFromDNS(ctx, domainForRequest, server, dns.TypeA)
 			dnsRequests.Done()
 		}()
-		go func(){
+		go func() {
 			ipsChan <- getIPsFromDNS(ctx, domainForRequest, server, dns.TypeAAAA)
 			dnsRequests.Done()
 		}()
 	}
 
-	dnsq("8.8.8.8:53") // google 1
-	dnsq("[2001:4860:4860::8844]:53") // google 2 (ipv6)
-	dnsq("77.88.8.8:53") // yandex 1
+	dnsq("8.8.8.8:53")                  // google 1
+	dnsq("[2001:4860:4860::8844]:53")   // google 2 (ipv6)
+	dnsq("77.88.8.8:53")                // yandex 1
 	dnsq("[2a02:6b8:0:1::feed:0ff]:53") // yandex 2 (ipv6)
 
-
-	go func(){
+	go func() {
 		// close channel after all requests complete
 		dnsRequests.Wait()
 		close(ipsChan)
@@ -105,7 +104,7 @@ func domainHasLocalIP(ctx context.Context, domain string) bool {
 		for _, ip := range ips {
 			isLocalIP := false
 			for _, localIP := range localIPs {
-				if ip.Equal(localIP){
+				if ip.Equal(localIP) {
 					isLocalIP = true
 					break
 				}
@@ -125,4 +124,3 @@ func domainHasLocalIP(ctx context.Context, domain string) bool {
 	return true
 
 }
-

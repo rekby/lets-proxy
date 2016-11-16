@@ -324,4 +324,3 @@ func (this *acmeStruct) createCertificateSelfSigned(domain string) (cert *tls.Ce
 	cert.PrivateKey = privateKey
 	return cert, nil
 }
-

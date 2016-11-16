@@ -6,31 +6,31 @@ package main
 import (
 	"crypto/rsa"
 
+	"context"
 	cryptorand "crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"github.com/Sirupsen/logrus"
 	"github.com/hlandau/acme/acmeapi"
 	"github.com/hlandau/acme/acmeapi/acmeutils"
-	"context"
 	"net"
 	"strings"
 	"sync"
 	"time"
-	"encoding/pem"
 )
 
 const (
 	SNI01_EXPIRE_TOKEN time.Duration = time.Minute * 10
-	ACME_DOMAIN_SUFFIX = ".acme.invalid"
+	ACME_DOMAIN_SUFFIX               = ".acme.invalid"
 )
 
 type acmeStruct struct {
-	serverAddress    string
-	privateKey       *rsa.PrivateKey
-	client           *acmeapi.Client
+	serverAddress string
+	privateKey    *rsa.PrivateKey
+	client        *acmeapi.Client
 
 	mutex            *sync.Mutex
 	authDomainsMutex *sync.Mutex
@@ -44,7 +44,7 @@ func (this *acmeStruct) authDomainPut(domain string) {
 	logrus.Debug("Put acme auth domain:", domain)
 	this.authDomains[domain] = time.Now().Add(SNI01_EXPIRE_TOKEN)
 }
-func (this *acmeStruct) authDomainCheck(domain string)bool {
+func (this *acmeStruct) authDomainCheck(domain string) bool {
 	this.authDomainsMutex.Lock()
 	defer this.authDomainsMutex.Unlock()
 
@@ -119,24 +119,7 @@ func (this *acmeStruct) CreateCertificate(domain string) (cert *tls.Certificate,
 		}
 	}
 
-	// check about we serve the domain
-	ips, err := net.LookupIP(domain)
-	if err != nil {
-		logrus.Warnf("Can't lookup ip for domain '%v': %v", domain, err)
-		return nil, errors.New("Can't lookup ip of the domain")
-	}
-	isLocalIP := false
-checkLocalIP:
-	for _, ip := range ips {
-		for _, localIP := range localIPs {
-			if ip.Equal(localIP) {
-				isLocalIP = true
-				break checkLocalIP
-			}
-		}
-	}
-	if !isLocalIP {
-		logrus.Warnf("Domain have ip of other server. Domain '%v', Domain ips: %v, Server ips: %v", domain, ips, localIPs)
+	if !domainHasLocalIP(domain) {
 		return nil, errors.New("Domain have ip of other server.")
 	}
 
@@ -274,7 +257,7 @@ func (this *acmeStruct) createCertificateAcme(domain string) (cert *tls.Certific
 		certResponse, err = this.client.RequestCertificate(csrDER, ctx)
 		if err == nil {
 			break
-		}else {
+		} else {
 			logrus.Infof("Can't get certificate for domain '%v': %v (response: %#v)", domain, err, certResponse)
 			time.Sleep(RETRY_SLEEP)
 		}
@@ -335,4 +318,25 @@ func (this *acmeStruct) createCertificateSelfSigned(domain string) (cert *tls.Ce
 	cert.Certificate = [][]byte{derCert}
 	cert.PrivateKey = privateKey
 	return cert, nil
+}
+
+func domainHasLocalIP(domain string) bool {
+	// check about we serve the domain
+	ips, err := net.LookupIP(domain)
+	if err != nil {
+		logrus.Warnf("Can't lookup ip for domain '%v': %v", domain, err)
+		return nil, errors.New("Can't lookup ip of the domain")
+	}
+	isLocalIP := false
+checkLocalIP:
+	for _, ip := range ips {
+		for _, localIP := range localIPs {
+			if ip.Equal(localIP) {
+				isLocalIP = true
+				break checkLocalIP
+			}
+		}
+	}
+	logrus.Debugf("Domain have ip of other server. Domain '%v', Domain ips: %v, Server ips: %v", domain, ips, localIPs)
+	return isLocalIP
 }

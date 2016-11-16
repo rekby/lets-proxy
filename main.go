@@ -76,7 +76,7 @@ func main() {
 	}
 	cutHeaders = append(cutHeaders, []byte("CONNECTION"))
 
-	for _, addHeader := range strings.Split(additionalHeadersParam, ",") {
+	for _, addHeader := range strings.Split(*additionalHeadersParam, ",") {
 		headerParts := strings.SplitN(addHeader, "=", 2)
 		if len(headerParts) > 0 {
 			cutHeaders = append(cutHeaders, []byte(strings.ToUpper(headerParts[0])))

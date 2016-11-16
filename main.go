@@ -62,7 +62,7 @@ func main() {
 	if *proxyMode != "http" && *proxyMode != "tcp" {
 		logrus.Panicf("Unknow proxy mode: %v", *proxyMode)
 	}
-	logrus.Info("Proxy mode: %v", *proxyMode)
+	logrus.Infof("Proxy mode: %v", *proxyMode)
 
 	for _, line := range strings.Split(*httpRealIPHeader, ",") {
 		line = strings.TrimSpace(line)

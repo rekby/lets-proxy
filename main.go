@@ -74,7 +74,6 @@ func main() {
 			cutHeaders = append(realIPHeaderNames, []byte(strings.ToUpper(line)))
 		}
 	}
-	cutHeaders = append(cutHeaders, []byte("CONNECTION"))
 
 	for _, addHeader := range strings.Split(*additionalHeadersParam, ",") {
 		headerParts := strings.SplitN(addHeader, "=", 2)

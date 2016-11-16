@@ -22,8 +22,7 @@ deploy:
     repo: rekby/lets-proxy
     tags: true
   go: 1.7
-  api_key:
-    secure: AUR6257+ZDxMulgJDUvRbEZjN802urZli7nCcJesL1VIoFSiwwDagzV/n8ws/uqdAmi+kdU9rb4bDeQQbpON3WJZAonR7IdiljVuThKgodYpzYEUNk56DQN4Cru8e53FL0jwhfDGXzm0sr5w82tKMdhCCPcYZwvAMouzw7GLNHnX4geWlANf4Sk779AOoQim7kz907L74EU86yyyJ788O/ms1xPAk1OI7leg4nh8UGxje88/N+1FHRiQyfN7fJfqRYPigdb/BpIGfRAyXvMNRURZw/Hoi3TH6SCm+EQSM8HygDu1+OGSupa/+pxMLbXksqlZ+o9Uq2gLYOm+/mMZIn9p2P54uzGBdxcdJfjUFAVmY+BoiL3qFHQhaxSXNvHmtgx1QeQYexfvm7NLB7vlDFDZcp/H3MaiGOxYI2eQ3FW8rCq0hYNj5tcVBkFoIwtRXwjuTOEYZGQw2muQ2F0IxTyic5VqDMh7qtc3eDk8TCtDlsjEv28mhypyEL7N5LQnQG67YGmdBZqp1dSRKf0Q5fSjygmCCVyTcir5mMnYxA7CuikePBMhzFFpkdxEJhdzsVNSp9vfisBBJ20tSlrUQ9MmnJCnV4FylY1VY3KVM/BA6iF1l2zpO5WlZSpRa4ehW0mBHgBAUsWGa9Y0vY7wVrU8o9Mv1On6yY2fdiA/sUg=
+  api_key: $GITHUB_TOKEN
   file:
     - "release/lets-proxy-linux-i386.tar.gz"
     - "release/lets-proxy-linux-amd64.tar.gz"

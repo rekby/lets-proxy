@@ -275,10 +275,16 @@ func saveState(state stateStruct) {
 		logrus.Errorf("Error while write state bytes to file '%v': %v", *stateFilePath+".new", err)
 		return
 	}
-	err = os.Rename(*stateFilePath, *stateFilePath+".old")
-	if err != nil {
-		logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath, *stateFilePath+".old", err)
+
+	if _, err := os.Stat(*stateFilePath); !os.IsNotExist(err) {
+		logrus.Infof("Rename current state file '%v' -> '%v'", *stateFilePath, *stateFilePath + ".old")
+
+		err = os.Rename(*stateFilePath, *stateFilePath + ".old")
+		if err != nil {
+			logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath, *stateFilePath + ".old", err)
+		}
 	}
+
 	err = os.Rename(*stateFilePath+".new", *stateFilePath)
 	if err != nil {
 		logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath+".new", *stateFilePath, err)

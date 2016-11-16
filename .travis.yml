@@ -1,13 +1,13 @@
 language: go
 go:
   - 1.7
-gobuild_args: -x --ldflags "-X 'main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT'"
+gobuild_args: --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\""
 
 script: echo "Deploy only, tested on own gitlab becouse travis incoming connect restrictions."
 
 before_deploy:
   - mkdir release
-  - 'GOARCH=386 GOOS=linux go build -o lets-proxy; tar -zcf release/lets-proxy-linux-i386.tar.gz lets-proxy'
+  - 'GOARCH=386 GOOS=linux go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o lets-proxy; tar -zcf release/lets-proxy-linux-i386.tar.gz lets-proxy'
   - 'GOARCH=amd64 GOOS=linux go build -o lets-proxy; tar -zcf release/lets-proxy-linux-amd64.tar.gz lets-proxy'
   - 'GOARCH=386 GOOS=freebsd go build -o lets-proxy; tar -zcf release/lets-proxy-freebsd-i386.tar.gz lets-proxy'
   - 'GOARCH=amd64 GOOS=freebsd go build -o lets-proxy; tar -zcf release/lets-proxy-freebsd-amd64.tar.gz lets-proxy'

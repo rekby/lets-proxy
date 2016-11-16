@@ -86,9 +86,9 @@ func domainHasLocalIP(ctx context.Context, domain string) bool {
 	}
 
 	dnsq("8.8.8.8:53") // google 1
-	dnsq("8.8.4.4:53") // google 2
+	dnsq("[2001:4860:4860::8844]:53") // google 2 (ipv6)
 	dnsq("77.88.8.8:53") // yandex 1
-	dnsq("77.88.8.1:53") // yandex 2
+	dnsq("[2a02:6b8:0:1::feed:0ff]:53") // yandex 2 (ipv6)
 
 
 	go func(){

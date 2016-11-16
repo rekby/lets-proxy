@@ -283,6 +283,8 @@ func saveState(state stateStruct) {
 		if err != nil {
 			logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath, *stateFilePath + ".old", err)
 		}
+	} else {
+		logrus.Infof("Create new state file '%v'", *stateFilePath)
 	}
 
 	err = os.Rename(*stateFilePath+".new", *stateFilePath)

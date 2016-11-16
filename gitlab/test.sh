@@ -38,19 +38,21 @@ echo MY IPv6: ${MY_IPv6}
 
 go build -o proxy github.com/rekby/lets-proxy
 
-./proxy --test &
+./proxy --test --real-ip-header=remote-ip,test-remote-ip --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https &
 #./proxy &  ## REAL CERT. WARNING - LIMITED CERT REQUEST
 
 sleep 10 # Allow to start, generate keys, etc.
 
 TEST=`curl -vsk https://${TMP_DOMAIN}`
 
-echo "Delete record"
-ID=`./ypdd ${DOMAIN} list | grep ${TMP_SUBDOMAIN} | cut -d ' ' -f 1`
-echo "ID: $ID"
-./ypdd $DOMAIN del $ID
+echo "${TEST}"
 
-( echo "$TEST" | grep -q "HOST:" && echo OK ) || ( echo FAIL && exit 1)
+( echo "$TEST" | grep -iq "HOST:" && echo HOST-OK ) || ( echo HOST-FAIL && exit 1 )
+( echo "$TEST" | grep -iq "remote-ip: ${MY_IPv6}" && echo HOST-OK ) || ( echo HOST-FAIL && exit 1 )
+( echo "$TEST" | grep -iq "test-remote-ip: ${MY_IPv6}" && echo HOST-OK ) || ( echo HOST-FAIL && exit 1 )
+( echo "$TEST" | grep -iq "https: on" && echo HOST-OK ) || ( echo HOST-FAIL && exit 1 )
+( echo "$TEST" | grep -iq "protohttps: on" && echo HOST-OK ) || ( echo HOST-FAIL && exit 1 )
+( echo "$TEST" | grep -iq "X-Forwarded-Proto: https" && echo HOST-OK ) || ( echo HOST-FAIL && exit 1 )
 
 echo -n "Test cache file exists: "
 if grep -q CERTIFICATE certificates/${TMP_DOMAIN}.crt && grep -q PRIVATE certificates/${TMP_DOMAIN}.key; then
@@ -65,3 +67,9 @@ else
     cat certificates/${TMP_DOMAIN}.key
     exit 1
 fi
+
+echo "Delete record"
+ID=`./ypdd ${DOMAIN} list | grep ${TMP_SUBDOMAIN} | cut -d ' ' -f 1`
+echo "ID: $ID"
+./ypdd $DOMAIN del $ID
+

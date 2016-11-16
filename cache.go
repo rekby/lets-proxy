@@ -1,15 +1,15 @@
 package main
 
 import (
-	"crypto/tls"
-	"path/filepath"
-	"crypto/x509"
-	"crypto/rsa"
-	"encoding/pem"
 	"crypto/ecdsa"
-	"github.com/hashicorp/golang-lru"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"github.com/Sirupsen/logrus"
+	"github.com/hashicorp/golang-lru"
 	"os"
+	"path/filepath"
 )
 
 var (
@@ -128,7 +128,7 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 		return
 	}
 	for _, certBytes := range cert.Certificate {
-		pemBlock := pem.Block{Type:"CERTIFICATE", Bytes:certBytes}
+		pemBlock := pem.Block{Type: "CERTIFICATE", Bytes: certBytes}
 		err = pem.Encode(certFile, &pemBlock)
 		if err != nil {
 			logrus.Errorf("Can't write pem block to certificate '%v': %v", certPath, err)
@@ -138,5 +138,3 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 
 	logrus.Infof("Save certificate for domain '%v' to files: %v, %v", domain, keyPath, certPath)
 }
-
-

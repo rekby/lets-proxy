@@ -299,7 +299,7 @@ func handleTcpConnection(in *net.TCPConn) {
 	err = tlsConn.Handshake()
 	logrus.Debug("tls ciper:", tlsConn.ConnectionState().CipherSuite)
 	if err == nil {
-		logrus.Debug("Handshake for incoming:", tlsConn.RemoteAddr().String())
+		logrus.Debug("Handshake for incoming:", tlsConn.RemoteAddr())
 	} else {
 		logrus.Infof("Error in tls handshake from '%v':%v", tlsConn.RemoteAddr(), err)
 	}
@@ -487,6 +487,7 @@ func startListener() (*net.TCPListener, error) {
 
 func usage(){
 	flag.CommandLine.SetOutput(os.Stderr)
+
 	fmt.Fprintln(os.Stderr, "Version:", VERSION)
 	fmt.Fprintln(os.Stderr, "Website: https://github.com/rekby/lets-proxy")
 	fmt.Fprintln(os.Stderr, "Developer: timofey@koolin.ru")

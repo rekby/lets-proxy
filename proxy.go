@@ -61,14 +61,14 @@ readHeaderLines:
 				if err == io.EOF && totalReadBytes == 0 {
 					// pass - normal end connection.
 				} else {
-					logrus.Warnf("Error while read header from '%v': %v", sourceConn.RemoteAddr().String(), err)
+					logrus.Infof("Error while read header from '%v': %v", sourceConn.RemoteAddr(), err)
 				}
 				targetConn.Close()
 				sourceConn.Close()
 				return
 			}
 			if readBytes != 1 {
-				logrus.Errorf("Can't read a byte from header from '%v'", sourceConn.RemoteAddr().String())
+				logrus.Infof("Can't read a byte from header from '%v'", sourceConn.RemoteAddr())
 				targetConn.Close()
 				sourceConn.Close()
 				return
@@ -82,7 +82,7 @@ readHeaderLines:
 			}
 		}
 		if len(headerStart) == 0 {
-			logrus.Warnf("Header line longer then buffer (%v bytes). Force close connection. '%v' -> '%v'.", len(buf), sourceConn.RemoteAddr(), targetConn.RemoteAddr())
+			logrus.Infof("Header line longer then buffer (%v bytes). Force close connection. '%v' -> '%v'.", len(buf), sourceConn.RemoteAddr(), targetConn.RemoteAddr())
 			targetConn.Close()
 			sourceConn.Close()
 			return
@@ -127,7 +127,7 @@ readHeaderLines:
 		// copy header without changes
 		_, err := targetConn.Write(headerStart)
 		if err != nil {
-			logrus.Warnf("Write header start, from '%v' to '%v', headerStart='%s': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), headerStart, err)
+			logrus.Infof("Write header start, from '%v' to '%v', headerStart='%s': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), headerStart, err)
 			sourceConn.Close()
 			targetConn.Close()
 			return
@@ -146,7 +146,7 @@ readHeaderLines:
 				return
 			}
 			if readBytes != 1 {
-				logrus.Errorf("Header copy read bytes != 1. Error. Close connections. '%v' -> '%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr())
+				logrus.Infof("Header copy read bytes != 1. Error. Close connections. '%v' -> '%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr())
 				sourceConn.Close()
 				targetConn.Close()
 				return
@@ -173,13 +173,13 @@ readHeaderLines:
 					logrus.Debugf("Header content-length parsed from '%v' to '%v': %v", sourceConn.RemoteAddr(),
 						targetConn.RemoteAddr(), contentLength)
 				} else {
-					logrus.Warnf("Can't header content-length parsed from '%v' to '%v' content '%s': %v", sourceConn.RemoteAddr(),
+					logrus.Infof("Can't header content-length parsed from '%v' to '%v' content '%s': %v", sourceConn.RemoteAddr(),
 						targetConn.RemoteAddr(), headerContent.Bytes(), err)
 					contentLength = 0
 				}
 
 			default:
-				logrus.Debug("Unknow why i need header content. Code error.")
+				logrus.Debug("ERROR. Unknow why i need header content. Code error.")
 			}
 		}
 	}
@@ -203,7 +203,7 @@ readHeaderLines:
 
 	_, err := targetConn.Write(headerBuf.Bytes())
 	if err != nil {
-		logrus.Errorf("Error while write real ip headers to target '%v' -> '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), err)
+		logrus.Infof("Error while write real ip headers to target '%v' -> '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), err)
 	}
 
 	return
@@ -233,7 +233,7 @@ func startProxy(targetAddr net.TCPAddr, in net.Conn) {
 }
 
 func startProxyHTTP(targetConn net.Conn, sourceConn net.Conn) {
-	logrus.Infof("Start http-proxy connection from '%v' to'%v'", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String())
+	logrus.Infof("Start http-proxy connection from '%v' to'%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr())
 
 	// answer from server proxy without changes
 	go func() {
@@ -241,7 +241,7 @@ func startProxyHTTP(targetConn net.Conn, sourceConn net.Conn) {
 		defer netbufPut(buf)
 
 		_, err := io.CopyBuffer(sourceConn, targetConn, buf)
-		logrus.Debugf("Connection closed with error '%v' -> '%v': %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), err)
+		logrus.Debugf("Connection closed with error '%v' -> '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), err)
 		sourceConn.Close()
 		targetConn.Close()
 	}()
@@ -259,14 +259,14 @@ func startProxyHTTP(targetConn net.Conn, sourceConn net.Conn) {
 
 				bytesCopied, err := io.CopyBuffer(targetConn, io.LimitReader(sourceConn, contentLength), buf)
 				summBytesCopied += bytesCopied
-				logrus.Debugf("Connection chunk copied '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), bytesCopied, summBytesCopied, err)
+				logrus.Debugf("Connection chunk copied '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), bytesCopied, summBytesCopied, err)
 				if err != nil {
-					logrus.Debugf("Connection closed '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), bytesCopied, summBytesCopied, err)
+					logrus.Debugf("Connection closed '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), bytesCopied, summBytesCopied, err)
 				}
 			} else {
 				bytesCopied, err := io.CopyBuffer(targetConn, sourceConn, buf)
 				summBytesCopied += bytesCopied
-				logrus.Debugf("Connection closed '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), bytesCopied, summBytesCopied, err)
+				logrus.Debugf("Connection closed '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), bytesCopied, summBytesCopied, err)
 				sourceConn.Close()
 				targetConn.Close()
 				return
@@ -276,14 +276,14 @@ func startProxyHTTP(targetConn net.Conn, sourceConn net.Conn) {
 }
 
 func startProxyTCP(targetConn net.Conn, sourceConn net.Conn) {
-	logrus.Infof("Start tcp-proxy connection from '%v' to'%v'", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String())
+	logrus.Infof("Start tcp-proxy connection from '%v' to'%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr())
 
 	go func() {
 		buf := netbufGet()
 		defer netbufPut(buf)
 
 		_, err := io.CopyBuffer(targetConn, sourceConn, buf)
-		logrus.Debugf("Connection closed with error '%v' -> '%v': %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), err)
+		logrus.Debugf("Connection closed with error '%v' -> '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), err)
 		sourceConn.Close()
 		targetConn.Close()
 	}()
@@ -292,7 +292,7 @@ func startProxyTCP(targetConn net.Conn, sourceConn net.Conn) {
 		defer netbufPut(buf)
 
 		_, err := io.CopyBuffer(sourceConn, targetConn, buf)
-		logrus.Debugf("Connection closed with error '%v' -> '%v': %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), err)
+		logrus.Debugf("Connection closed with error '%v' -> '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), err)
 		sourceConn.Close()
 		targetConn.Close()
 	}()

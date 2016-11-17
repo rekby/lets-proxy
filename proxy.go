@@ -47,25 +47,37 @@ func netbufPut(buf []byte) {
 func proxyHTTPHeaders(targetConn net.Conn, sourceConn net.Conn) (keepalive bool, contentLength int64) {
 	buf := netbufGet()
 	defer netbufPut(buf)
+	var totalReadBytes int
 
 	// Read lines
-	readHeaderLines:
+readHeaderLines:
 	for {
 		var i int
 		var headerStart []byte
 		for i = 0; i < len(buf); i++ {
 			readBytes, err := sourceConn.Read(buf[i : i+1])
+			totalReadBytes += readBytes
 			if err != nil {
-				logrus.Warnf("Error while read header from '%v': %v", sourceConn.RemoteAddr().String(), err)
+				if err == io.EOF && totalReadBytes == 0 {
+					// pass - normal end connection.
+				} else {
+					logrus.Warnf("Error while read header from '%v': %v", sourceConn.RemoteAddr().String(), err)
+				}
+				targetConn.Close()
+				sourceConn.Close()
 				return
 			}
 			if readBytes != 1 {
 				logrus.Errorf("Can't read a byte from header from '%v'", sourceConn.RemoteAddr().String())
+				targetConn.Close()
+				sourceConn.Close()
 				return
 			}
 			if buf[i] == ':' || buf[i] == '\n' {
 				headerStart = buf[:i+1]
 				logrus.Debugf("Header Name '%v' -> '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), buf[:i])
+				targetConn.Close()
+				sourceConn.Close()
 				break
 			}
 		}

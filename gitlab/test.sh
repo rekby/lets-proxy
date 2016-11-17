@@ -2,6 +2,8 @@
 
 #yum install -y iproute
 
+echo "install golang"
+
 eval "$(curl -sL https://raw.githubusercontent.com/travis-ci/gimme/master/gimme | GIMME_GO_VERSION=1.7 bash)"
 
 pwd
@@ -44,7 +46,9 @@ function delete_domain(){
 
 go build -o proxy github.com/rekby/lets-proxy
 
-./proxy --test --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https &
+echo "Start proxy interactive - for view full log"
+
+./proxy --test --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https &
 #./proxy &  ## REAL CERT. WARNING - LIMITED CERT REQUEST
 
 sleep 10 # Allow to start, generate keys, etc.
@@ -91,5 +95,19 @@ else
     delete_domain
     exit 1
 fi
+
+echo "Kill proxy"
+PID=`ps aux | grep proxy | awk '{print $2}'`
+kill -9 ${PID}
+sleep 1
+
+echo "Test install proxy"
+./proxy --test --service-name=lets-proxy --service-action=install
+./proxy --test --service-name=lets-proxy --service-action=reinstall
+
+find /etc -name '*lets-proxy*'
+
+./proxy --test --service-name=lets-proxy --service-action=uninstall
+
 
 delete_domain

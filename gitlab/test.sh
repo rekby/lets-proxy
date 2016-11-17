@@ -105,13 +105,6 @@ echo "Test install proxy"
 
 find /etc -name '*lets-proxy*'
 
-service start lets-proxy
-
-echo "Request domain"
-curl -k https://${TMP_DOMAIN}
-
-service stop lets-proxy
-
 ./proxy --test --service-name=lets-proxy --service-action=uninstall
 
 

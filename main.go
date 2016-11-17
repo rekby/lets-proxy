@@ -83,6 +83,18 @@ func main() {
 		return
 	}
 
+	if *logOutput != "-" {
+		fLog, err := os.OpenFile(*logOutput, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if fLog != nil {
+			defer fLog.Close()
+		}
+		if err == nil {
+			logrus.SetOutput(fLog)
+		} else {
+			logrus.Errorf("Can't open logfile '%v': %v", *logOutput, err)
+		}
+	}
+
 	prepare()
 
 	var serviceArguments []string
@@ -187,17 +199,6 @@ func prepare() {
 	var err error
 
 	// Init
-	if *logOutput != "-" {
-		fLog, err := os.OpenFile(*logOutput, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-		if fLog != nil {
-			defer fLog.Close()
-		}
-		if err == nil {
-			logrus.SetOutput(fLog)
-		} else {
-			logrus.Errorf("Can't open logfile '%v': %v", *logOutput, err)
-		}
-	}
 	logrus.SetLevel(logrus.WarnLevel)
 	switch *logLevel {
 	case "fatal":

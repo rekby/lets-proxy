@@ -12,11 +12,12 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/golang-lru"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"strings"
 	"time"
+	"regexp"
+	"errors"
 )
 
 const (
@@ -44,6 +45,7 @@ var (
 	logLevel               = flag.String("loglevel", "warning", "fatal|error|warning|info|debug")
 	logOutput              = flag.String("logout", "-", "Path to logout. Special: '-' (without quotes) - stderr")
 	versionPrint           = flag.Bool("version", false, "print version and exit.")
+	nonCertDomains         = flag.String("non-cert-domains", "", "No obtain certificate for mathed domains. Regexpes separated by comma.")
 )
 
 var (
@@ -52,6 +54,7 @@ var (
 	cutHeaders        [][]byte        // internal - all headers, that cut from request (upper case).
 	additionalHeaders []byte          // prepared additional headers
 	acmeService       *acmeStruct
+	nonCertDomainsRegexps []*regexp.Regexp
 )
 
 type stateStruct struct {
@@ -102,6 +105,27 @@ func main() {
 		logrus.Panicf("Unknow proxy mode: %v", *proxyMode)
 	}
 	logrus.Infof("Proxy mode: %v", *proxyMode)
+
+	for _, ignoreDomain := range strings.Split(*nonCertDomains, ",") {
+		ignoreDomain = strings.TrimSpace(ignoreDomain)
+		if ignoreDomain == "" {
+			continue
+		}
+		ignoreDomainRE, err := regexp.Compile(ignoreDomain)
+		if err != nil {
+			logrus.Errorf("Bad ignore domain regexp '%v': %v", ignoreDomain, err)
+		}
+		if ignoreDomainRE != nil {
+			nonCertDomainsRegexps = append(nonCertDomainsRegexps, ignoreDomainRE)
+		}
+	}
+	if logrus.GetLevel() >= logrus.InfoLevel {
+		regexps := []string{}
+		for _, re := range nonCertDomainsRegexps {
+			regexps = append(regexps, re.String())
+		}
+		logrus.Info("Non cert domain regexps: ", "['" + strings.Join(regexps, "', '") + "']")
+	}
 
 	for _, line := range strings.Split(*httpRealIPHeader, ",") {
 		line = strings.TrimSpace(line)
@@ -222,6 +246,13 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 		// pass
 	}
 
+	for _, re := range nonCertDomainsRegexps {
+		if re.MatchString(domain){
+			logrus.Debugf("Ignore obtain cert for domain '%v' by regexp '%v'", domain, re.String())
+			return nil, errors.New("Ignore cert obtain by regexp")
+		}
+	}
+
 	cert, err = acmeService.CreateCertificate(domain)
 	if err == nil {
 		certificateCachePut(domain, cert)
@@ -258,7 +289,7 @@ func getLocalIPs() (res []net.IP) {
 	if bindAddr.IP.IsUnspecified() || len(bindAddr.IP) == 0 {
 		addresses, err := net.InterfaceAddrs()
 		if err != nil {
-			log.Panic("Can't get local ip addresses:", err)
+			logrus.Panic("Can't get local ip addresses:", err)
 		}
 		res = make([]net.IP, 0, len(addresses))
 		for _, addr := range addresses {

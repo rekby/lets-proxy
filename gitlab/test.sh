@@ -46,7 +46,7 @@ go build -o proxy github.com/rekby/lets-proxy
 
 echo "Start proxy interactive - for view full log"
 
-./proxy --test --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https
+./proxy --test --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https &
 #./proxy &  ## REAL CERT. WARNING - LIMITED CERT REQUEST
 
 sleep 10 # Allow to start, generate keys, etc.

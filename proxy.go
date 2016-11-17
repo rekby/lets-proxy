@@ -44,78 +44,12 @@ func netbufPut(buf []byte) {
 	poolNetBuffers.Put(buf)
 }
 
-func startProxy(targetAddr net.TCPAddr, in net.Conn) {
-	targetConnCommon, err := net.DialTimeout("tcp", targetAddr.String(), *targetConnTimeout)
-	if err != nil {
-		logrus.Warnf("Can't connect to target '%v': %v", targetAddr.String(), err)
-		return
-	}
-
-	targetConn, ok := targetConnCommon.(*net.TCPConn)
-	if !ok {
-		logrus.Errorf("Can't cast connection to tcp connection, target '%v'", targetAddr.String())
-		return
-	}
-
-	switch *proxyMode {
-	case "http":
-		startProxyHTTP(targetConn, in)
-	case "tcp":
-		startProxyTCP(targetConn, in)
-	default:
-		logrus.Panicf("Unknow proxy mode: %v", *proxyMode)
-	}
-}
-
-func startProxyHTTP(targetConn net.Conn, sourceConn net.Conn) {
-	logrus.Infof("Start http-proxy connection from '%v' to'%v'", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String())
-
-	// answer from server proxy without changes
-	go func() {
-		buf := netbufGet()
-		defer netbufPut(buf)
-
-		_, err := io.CopyBuffer(sourceConn, targetConn, buf)
-		logrus.Debugf("Connection closed with error '%v' -> '%v': %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), err)
-		sourceConn.Close()
-		targetConn.Close()
-	}()
-
-	// proxy incoming traffic, parse every headers
-	go func() {
-		buf := netbufGet()
-		defer netbufPut(buf)
-		var summBytesCopied int64
-		for {
-			keepalive, contentLength := proxyHTTPHeaders(targetConn, sourceConn)
-			if keepalive {
-				logrus.Debugf("Start keep-alieved proxy. '%v' -> '%v', content-length '%v'", sourceConn.RemoteAddr(),
-					targetConn.RemoteAddr(), contentLength)
-
-				bytesCopied, err := io.CopyBuffer(targetConn, io.LimitReader(sourceConn, contentLength), buf)
-				summBytesCopied += bytesCopied
-				logrus.Debugf("Connection chunk copied '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), bytesCopied, summBytesCopied, err)
-				if err != nil {
-					logrus.Debugf("Connection closed '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), bytesCopied, summBytesCopied, err)
-				}
-			} else {
-				bytesCopied, err := io.CopyBuffer(targetConn, sourceConn, buf)
-				summBytesCopied += bytesCopied
-				logrus.Debugf("Connection closed '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), bytesCopied, summBytesCopied, err)
-				sourceConn.Close()
-				targetConn.Close()
-				return
-			}
-		}
-	}()
-}
-
 func proxyHTTPHeaders(targetConn net.Conn, sourceConn net.Conn) (keepalive bool, contentLength int64) {
 	buf := netbufGet()
 	defer netbufPut(buf)
 
 	// Read lines
-readHeaderLines:
+	readHeaderLines:
 	for {
 		var i int
 		var headerStart []byte
@@ -261,6 +195,72 @@ readHeaderLines:
 	}
 
 	return
+}
+
+func startProxy(targetAddr net.TCPAddr, in net.Conn) {
+	targetConnCommon, err := net.DialTimeout("tcp", targetAddr.String(), *targetConnTimeout)
+	if err != nil {
+		logrus.Warnf("Can't connect to target '%v': %v", targetAddr.String(), err)
+		return
+	}
+
+	targetConn, ok := targetConnCommon.(*net.TCPConn)
+	if !ok {
+		logrus.Errorf("Can't cast connection to tcp connection, target '%v'", targetAddr.String())
+		return
+	}
+
+	switch *proxyMode {
+	case "http":
+		startProxyHTTP(targetConn, in)
+	case "tcp":
+		startProxyTCP(targetConn, in)
+	default:
+		logrus.Panicf("Unknow proxy mode: %v", *proxyMode)
+	}
+}
+
+func startProxyHTTP(targetConn net.Conn, sourceConn net.Conn) {
+	logrus.Infof("Start http-proxy connection from '%v' to'%v'", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String())
+
+	// answer from server proxy without changes
+	go func() {
+		buf := netbufGet()
+		defer netbufPut(buf)
+
+		_, err := io.CopyBuffer(sourceConn, targetConn, buf)
+		logrus.Debugf("Connection closed with error '%v' -> '%v': %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), err)
+		sourceConn.Close()
+		targetConn.Close()
+	}()
+
+	// proxy incoming traffic, parse every headers
+	go func() {
+		buf := netbufGet()
+		defer netbufPut(buf)
+		var summBytesCopied int64
+		for {
+			keepalive, contentLength := proxyHTTPHeaders(targetConn, sourceConn)
+			if keepalive {
+				logrus.Debugf("Start keep-alieved proxy. '%v' -> '%v', content-length '%v'", sourceConn.RemoteAddr(),
+					targetConn.RemoteAddr(), contentLength)
+
+				bytesCopied, err := io.CopyBuffer(targetConn, io.LimitReader(sourceConn, contentLength), buf)
+				summBytesCopied += bytesCopied
+				logrus.Debugf("Connection chunk copied '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), bytesCopied, summBytesCopied, err)
+				if err != nil {
+					logrus.Debugf("Connection closed '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), bytesCopied, summBytesCopied, err)
+				}
+			} else {
+				bytesCopied, err := io.CopyBuffer(targetConn, sourceConn, buf)
+				summBytesCopied += bytesCopied
+				logrus.Debugf("Connection closed '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr().String(), targetConn.RemoteAddr().String(), bytesCopied, summBytesCopied, err)
+				sourceConn.Close()
+				targetConn.Close()
+				return
+			}
+		}
+	}()
 }
 
 func startProxyTCP(targetConn net.Conn, sourceConn net.Conn) {

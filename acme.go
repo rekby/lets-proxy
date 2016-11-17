@@ -36,13 +36,6 @@ type acmeStruct struct {
 	authDomains      map[string]time.Time
 }
 
-func (this *acmeStruct) authDomainPut(domain string) {
-	this.authDomainsMutex.Lock()
-	defer this.authDomainsMutex.Unlock()
-
-	logrus.Debug("Put acme auth domain:", domain)
-	this.authDomains[domain] = time.Now().Add(SNI01_EXPIRE_TOKEN)
-}
 func (this *acmeStruct) authDomainCheck(domain string) bool {
 	this.authDomainsMutex.Lock()
 	defer this.authDomainsMutex.Unlock()
@@ -60,32 +53,12 @@ func (this *acmeStruct) authDomainDelete(domain string) {
 	delete(this.authDomains, domain)
 }
 
-func (this *acmeStruct) Init() {
-	this.client = &acmeapi.Client{
-		AccountKey:   this.privateKey,
-		DirectoryURL: this.serverAddress,
-	}
+func (this *acmeStruct) authDomainPut(domain string) {
+	this.authDomainsMutex.Lock()
+	defer this.authDomainsMutex.Unlock()
 
-	this.mutex = &sync.Mutex{}
-
-	this.authDomainsMutex = &sync.Mutex{}
-	this.authDomains = make(map[string]time.Time)
-	this.CleanupTimer()
-}
-
-func (this *acmeStruct) RegisterEnsure(ctx context.Context) (err error) {
-	reg := &acmeapi.Registration{}
-	for i := 0; i < TRY_COUNT+1; i++ { // +1 count need for request latest agreement uri
-		reg.AgreementURI = reg.LatestAgreementURI
-		if reg.AgreementURI != "" {
-			logrus.Info("Auto agree with terms:", reg.LatestAgreementURI)
-		}
-		err = this.client.UpsertRegistration(reg, ctx)
-		if reg.AgreementURI != "" && err == nil {
-			return
-		}
-	}
-	return err
+	logrus.Debug("Put acme auth domain:", domain)
+	this.authDomains[domain] = time.Now().Add(SNI01_EXPIRE_TOKEN)
 }
 
 func (this *acmeStruct) Cleanup() {
@@ -324,3 +297,32 @@ func (this *acmeStruct) createCertificateSelfSigned(domain string) (cert *tls.Ce
 	cert.PrivateKey = privateKey
 	return cert, nil
 }
+
+func (this *acmeStruct) Init() {
+	this.client = &acmeapi.Client{
+		AccountKey:   this.privateKey,
+		DirectoryURL: this.serverAddress,
+	}
+
+	this.mutex = &sync.Mutex{}
+
+	this.authDomainsMutex = &sync.Mutex{}
+	this.authDomains = make(map[string]time.Time)
+	this.CleanupTimer()
+}
+
+func (this *acmeStruct) RegisterEnsure(ctx context.Context) (err error) {
+	reg := &acmeapi.Registration{}
+	for i := 0; i < TRY_COUNT+1; i++ { // +1 count need for request latest agreement uri
+		reg.AgreementURI = reg.LatestAgreementURI
+		if reg.AgreementURI != "" {
+			logrus.Info("Auto agree with terms:", reg.LatestAgreementURI)
+		}
+		err = this.client.UpsertRegistration(reg, ctx)
+		if reg.AgreementURI != "" && err == nil {
+			return
+		}
+	}
+	return err
+}
+

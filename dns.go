@@ -13,39 +13,6 @@ var (
 	localIPs []net.IP
 )
 
-func getIPsFromDNS(ctx context.Context, domain, dnsServer string, recordType uint16) []net.IP {
-	dnsClient := dns.Client{}
-
-	msg := dns.Msg{}
-	msg.Id = dns.Id()
-	msg.SetQuestion(domain, recordType)
-	answer, _, err := dnsClient.Exchange(&msg, dnsServer)
-	if err != nil {
-		logrus.Infof("Error from dns server '%v' for domain '%v', record type '%v': %v", dnsServer, domain, dns.TypeToString[recordType], err)
-		return nil
-	}
-	if answer.Id != msg.Id {
-		logrus.Infof("Error answer ID from dns server '%v' for domain '%v', record type '%v', %v != %v", dnsServer, domain, dns.TypeToString[recordType], msg.Id, answer.Id)
-		return nil
-	}
-	var res []net.IP
-	for _, r := range answer.Answer {
-		if r.Header().Rrtype != recordType {
-			continue
-		}
-		switch r.Header().Rrtype {
-		case dns.TypeA:
-			res = append(res, r.(*dns.A).A)
-		case dns.TypeAAAA:
-			res = append(res, r.(*dns.AAAA).AAAA)
-		default:
-			continue
-		}
-	}
-	logrus.Debugf("Receive answer from dns server '%v' for domain '%v' record type '%v' ips: '%v'", dnsServer, domain, dns.TypeToString[recordType], res)
-	return res
-}
-
 func domainHasLocalIP(ctx context.Context, domain string) bool {
 	var ipsChan = make(chan []net.IP, 1)
 	defer func() {
@@ -124,3 +91,37 @@ func domainHasLocalIP(ctx context.Context, domain string) bool {
 	return true
 
 }
+
+func getIPsFromDNS(ctx context.Context, domain, dnsServer string, recordType uint16) []net.IP {
+	dnsClient := dns.Client{}
+
+	msg := dns.Msg{}
+	msg.Id = dns.Id()
+	msg.SetQuestion(domain, recordType)
+	answer, _, err := dnsClient.Exchange(&msg, dnsServer)
+	if err != nil {
+		logrus.Infof("Error from dns server '%v' for domain '%v', record type '%v': %v", dnsServer, domain, dns.TypeToString[recordType], err)
+		return nil
+	}
+	if answer.Id != msg.Id {
+		logrus.Infof("Error answer ID from dns server '%v' for domain '%v', record type '%v', %v != %v", dnsServer, domain, dns.TypeToString[recordType], msg.Id, answer.Id)
+		return nil
+	}
+	var res []net.IP
+	for _, r := range answer.Answer {
+		if r.Header().Rrtype != recordType {
+			continue
+		}
+		switch r.Header().Rrtype {
+		case dns.TypeA:
+			res = append(res, r.(*dns.A).A)
+		case dns.TypeAAAA:
+			res = append(res, r.(*dns.AAAA).AAAA)
+		default:
+			continue
+		}
+	}
+	logrus.Debugf("Receive answer from dns server '%v' for domain '%v' record type '%v' ips: '%v'", dnsServer, domain, dns.TypeToString[recordType], res)
+	return res
+}
+

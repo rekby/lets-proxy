@@ -195,6 +195,117 @@ func main() {
 
 }
 
+func acceptConnections(listener *net.TCPListener) {
+	for {
+		tcpConn, err := listener.AcceptTCP()
+		if err != nil {
+			panic(err)
+		}
+		go handleTcpConnection(tcpConn)
+	}
+}
+
+func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, err error) {
+	domain := strings.ToLower(clientHello.ServerName)
+	if logrus.GetLevel() >= logrus.DebugLevel {
+		logrus.Debugf("Required certificate for domain '%v'", domain)
+	}
+
+	if strings.HasSuffix(domain, ACME_DOMAIN_SUFFIX) {
+		// force generate new certificate, without caching.
+		return acmeService.CreateCertificate(domain)
+	}
+
+	cert = certificateCacheGet(domain)
+
+	switch {
+	case cert != nil && cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now()):
+		logrus.Warnf("Expired certificate got from cache for domain '%v'", domain)
+	// pass to create new certificate.
+	case cert != nil:
+		return cert, nil
+	default:
+		// pass
+	}
+
+	for _, re := range nonCertDomainsRegexps {
+		if re.MatchString(domain) {
+			logrus.Debugf("Ignore obtain cert for domain '%v' by regexp '%v'", domain, re.String())
+			return nil, errors.New("Ignore cert obtain by regexp")
+		}
+	}
+
+	cert, err = acmeService.CreateCertificate(domain)
+	if err == nil {
+		certificateCachePut(domain, cert)
+	}
+	return cert, err
+}
+
+func getLocalIPs() (res []net.IP) {
+	bindAddr, _ := net.ResolveTCPAddr("tcp", *bindTo)
+	if bindAddr.IP.IsUnspecified() || len(bindAddr.IP) == 0 {
+		addresses, err := net.InterfaceAddrs()
+		if err != nil {
+			logrus.Panic("Can't get local ip addresses:", err)
+		}
+		res = make([]net.IP, 0, len(addresses))
+		for _, addr := range addresses {
+			logrus.Info("Local ip:", addr.String())
+			ip, _, err := net.ParseCIDR(addr.String())
+			if err == nil {
+				res = append(res, ip)
+			} else {
+				logrus.Errorf("Can't parse local ip '%v': %v", addr.String(), err)
+			}
+		}
+	} else {
+		res = []net.IP{bindAddr.IP}
+	}
+	if logrus.GetLevel() >= logrus.InfoLevel {
+		ipStrings := make([]string, len(res))
+		for i, addr := range res {
+			ipStrings[i] = addr.String()
+		}
+		logrus.Info("Local ip:", ipStrings)
+	}
+	return res
+}
+
+func getTargetConn(in *net.TCPConn) (net.TCPAddr, error) {
+	targetAddrP, err := net.ResolveTCPAddr("tcp", in.LocalAddr().String())
+	if err != nil {
+		logrus.Errorf("Can't resolve local addr '%v': %v", in.LocalAddr().String(), err)
+		return net.TCPAddr{}, err
+	}
+	targetAddrP.Port = *targetPort
+	return *targetAddrP, nil
+}
+
+func handleTcpConnection(in *net.TCPConn) {
+	target, err := getTargetConn(in)
+	if err != nil {
+		logrus.Errorf("Can't get target IP/port for '%v': %v", target.String(), err)
+		return
+	}
+
+	// handle ssl
+	tlsConfig := tls.Config{
+		GetCertificate: certificateGet,
+		MinVersion:     tls.VersionSSL30,
+	}
+	tlsConn := tls.Server(in, &tlsConfig)
+	err = tlsConn.Handshake()
+	logrus.Debug("tls ciper:", tlsConn.ConnectionState().CipherSuite)
+	if err == nil {
+		logrus.Debug("Handshake for incoming:", tlsConn.RemoteAddr().String())
+	} else {
+		logrus.Infof("Error in tls handshake from '%v':%v", tlsConn.RemoteAddr(), err)
+	}
+
+	startProxy(target, tlsConn)
+}
+
 func prepare() {
 	var err error
 
@@ -322,133 +433,6 @@ func prepare() {
 	acmeService.RegisterEnsure(context.TODO())
 }
 
-func startListener() (*net.TCPListener, error) {
-
-	// Start listen
-	tcpAddr, err := net.ResolveTCPAddr("tcp", *bindTo)
-	if err != nil {
-		logrus.Panicf("Can't resolve bind-to address '%v': %v", *bindTo, err)
-	}
-	logrus.Errorf("Start listen: %v", tcpAddr)
-
-	listener, err := net.ListenTCP("tcp", tcpAddr)
-	if err != nil {
-		logrus.Errorf("Can't start listen on '%v': %v", tcpAddr, err)
-	}
-	return listener, err
-}
-
-func acceptConnections(listener *net.TCPListener) {
-	for {
-		tcpConn, err := listener.AcceptTCP()
-		if err != nil {
-			panic(err)
-		}
-		go handleTcpConnection(tcpConn)
-	}
-}
-
-func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, err error) {
-	domain := strings.ToLower(clientHello.ServerName)
-	if logrus.GetLevel() >= logrus.DebugLevel {
-		logrus.Debugf("Required certificate for domain '%v'", domain)
-	}
-
-	if strings.HasSuffix(domain, ACME_DOMAIN_SUFFIX) {
-		// force generate new certificate, without caching.
-		return acmeService.CreateCertificate(domain)
-	}
-
-	cert = certificateCacheGet(domain)
-
-	switch {
-	case cert != nil && cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now()):
-		logrus.Warnf("Expired certificate got from cache for domain '%v'", domain)
-		// pass to create new certificate.
-	case cert != nil:
-		return cert, nil
-	default:
-		// pass
-	}
-
-	for _, re := range nonCertDomainsRegexps {
-		if re.MatchString(domain) {
-			logrus.Debugf("Ignore obtain cert for domain '%v' by regexp '%v'", domain, re.String())
-			return nil, errors.New("Ignore cert obtain by regexp")
-		}
-	}
-
-	cert, err = acmeService.CreateCertificate(domain)
-	if err == nil {
-		certificateCachePut(domain, cert)
-	}
-	return cert, err
-}
-
-func handleTcpConnection(in *net.TCPConn) {
-	target, err := getTargetConn(in)
-	if err != nil {
-		logrus.Errorf("Can't get target IP/port for '%v': %v", target.String(), err)
-		return
-	}
-
-	// handle ssl
-	tlsConfig := tls.Config{
-		GetCertificate: certificateGet,
-		MinVersion:     tls.VersionSSL30,
-	}
-	tlsConn := tls.Server(in, &tlsConfig)
-	err = tlsConn.Handshake()
-	logrus.Debug("tls ciper:", tlsConn.ConnectionState().CipherSuite)
-	if err == nil {
-		logrus.Debug("Handshake for incoming:", tlsConn.RemoteAddr().String())
-	} else {
-		logrus.Infof("Error in tls handshake from '%v':%v", tlsConn.RemoteAddr(), err)
-	}
-
-	startProxy(target, tlsConn)
-}
-
-func getLocalIPs() (res []net.IP) {
-	bindAddr, _ := net.ResolveTCPAddr("tcp", *bindTo)
-	if bindAddr.IP.IsUnspecified() || len(bindAddr.IP) == 0 {
-		addresses, err := net.InterfaceAddrs()
-		if err != nil {
-			logrus.Panic("Can't get local ip addresses:", err)
-		}
-		res = make([]net.IP, 0, len(addresses))
-		for _, addr := range addresses {
-			logrus.Info("Local ip:", addr.String())
-			ip, _, err := net.ParseCIDR(addr.String())
-			if err == nil {
-				res = append(res, ip)
-			} else {
-				logrus.Errorf("Can't parse local ip '%v': %v", addr.String(), err)
-			}
-		}
-	} else {
-		res = []net.IP{bindAddr.IP}
-	}
-	if logrus.GetLevel() >= logrus.InfoLevel {
-		ipStrings := make([]string, len(res))
-		for i, addr := range res {
-			ipStrings[i] = addr.String()
-		}
-		logrus.Info("Local ip:", ipStrings)
-	}
-	return res
-}
-
-func getTargetConn(in *net.TCPConn) (net.TCPAddr, error) {
-	targetAddrP, err := net.ResolveTCPAddr("tcp", in.LocalAddr().String())
-	if err != nil {
-		logrus.Errorf("Can't resolve local addr '%v': %v", in.LocalAddr().String(), err)
-		return net.TCPAddr{}, err
-	}
-	targetAddrP.Port = *targetPort
-	return *targetAddrP, nil
-}
-
 func saveState(state stateStruct) {
 	if state.changed {
 		logrus.Infof("Saving state to '%v'", *stateFilePath)
@@ -482,4 +466,20 @@ func saveState(state stateStruct) {
 	if err != nil {
 		logrus.Errorf("Can't rename '%v' to '%v': %v", *stateFilePath+".new", *stateFilePath, err)
 	}
+}
+
+func startListener() (*net.TCPListener, error) {
+
+	// Start listen
+	tcpAddr, err := net.ResolveTCPAddr("tcp", *bindTo)
+	if err != nil {
+		logrus.Panicf("Can't resolve bind-to address '%v': %v", *bindTo, err)
+	}
+	logrus.Errorf("Start listen: %v", tcpAddr)
+
+	listener, err := net.ListenTCP("tcp", tcpAddr)
+	if err != nil {
+		logrus.Errorf("Can't start listen on '%v': %v", tcpAddr, err)
+	}
+	return listener, err
 }

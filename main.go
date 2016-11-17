@@ -69,6 +69,7 @@ type stateStruct struct {
 }
 
 func main() {
+	flag.Usage = usage
 	flag.Parse()
 
 	if *workingDir != "" {
@@ -482,4 +483,14 @@ func startListener() (*net.TCPListener, error) {
 		logrus.Errorf("Can't start listen on '%v': %v", tcpAddr, err)
 	}
 	return listener, err
+}
+
+func usage(){
+	flag.CommandLine.SetOutput(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Version:", VERSION)
+	fmt.Fprintln(os.Stderr, "Website: https://github.com/rekby/lets-proxy")
+	fmt.Fprintln(os.Stderr, "Developer: timofey@koolin.ru")
+	fmt.Fprintln(os.Stderr)
+
+	flag.PrintDefaults()
 }

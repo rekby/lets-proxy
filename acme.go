@@ -29,7 +29,7 @@ const (
 type acmeStruct struct {
 	serverAddress string
 	privateKey    *rsa.PrivateKey
-	client        *acmeapi.Client
+	acmePool      *acmeClientPool
 
 	mutex            *sync.Mutex
 	authDomainsMutex *sync.Mutex
@@ -112,10 +112,18 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domain string
 	defer this.mutex.Unlock()
 
 	var auth *acmeapi.Authorization
+	client, err := this.acmePool.Get(ctx)
+	if client != nil {
+		defer this.acmePool.Put(client)
+	}
+	if err != nil {
+		logrus.Errorf("Can't get acme client from pool for domain '%v': %v", domain, err)
+		return nil, err
+	}
 
 	for i := 0; i < TRY_COUNT; i++ {
 		logrus.Debugf("Create new authorization for domain '%v'", domain)
-		auth, err = this.client.NewAuthorization(domain, ctx)
+		auth, err = client.NewAuthorization(domain, ctx)
 		if err == nil {
 			break
 		} else {
@@ -173,7 +181,7 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domain string
 	}
 	for i := 0; i < TRY_COUNT; i++ {
 		logrus.Debugf("Respond to challenge for domain '%v'", domain)
-		err = this.client.RespondToChallenge(challenge, challengeResponse, this.privateKey, ctx)
+		err = client.RespondToChallenge(challenge, challengeResponse, this.privateKey, ctx)
 		if err == nil {
 			break
 		} else {
@@ -190,7 +198,7 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domain string
 
 	for i := 0; i < TRY_COUNT; i++ {
 		logrus.Debugf("Load challenge for domain '%v'", domain)
-		err = this.client.LoadChallenge(challenge, ctx)
+		err = client.LoadChallenge(challenge, ctx)
 		if err == nil {
 			break
 		} else {
@@ -232,7 +240,7 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domain string
 	var certResponse *acmeapi.Certificate
 	for i := 0; i < TRY_COUNT; i++ {
 		logrus.Debugf("Certificate request for domain '%v'", domain)
-		certResponse, err = this.client.RequestCertificate(csrDER, ctx)
+		certResponse, err = client.RequestCertificate(csrDER, ctx)
 		if err == nil {
 			break
 		} else {
@@ -299,10 +307,7 @@ func (this *acmeStruct) createCertificateSelfSigned(domain string) (cert *tls.Ce
 }
 
 func (this *acmeStruct) Init() {
-	this.client = &acmeapi.Client{
-		AccountKey:   this.privateKey,
-		DirectoryURL: this.serverAddress,
-	}
+	this.acmePool = NewAcmeClientPool(*parallelAcmeRequests, this.privateKey, this.serverAddress)
 
 	this.mutex = &sync.Mutex{}
 
@@ -310,19 +315,3 @@ func (this *acmeStruct) Init() {
 	this.authDomains = make(map[string]time.Time)
 	this.CleanupTimer()
 }
-
-func (this *acmeStruct) RegisterEnsure(ctx context.Context) (err error) {
-	reg := &acmeapi.Registration{}
-	for i := 0; i < TRY_COUNT+1; i++ { // +1 count need for request latest agreement uri
-		reg.AgreementURI = reg.LatestAgreementURI
-		if reg.AgreementURI != "" {
-			logrus.Info("Auto agree with terms:", reg.LatestAgreementURI)
-		}
-		err = this.client.UpsertRegistration(reg, ctx)
-		if reg.AgreementURI != "" && err == nil {
-			return
-		}
-	}
-	return err
-}
-

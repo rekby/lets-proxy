@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	cryptorand "crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -52,6 +51,7 @@ var (
 	serviceAction          = flag.String("service-action", "", "start,stop,install,uninstall,reinstall")
 	serviceName            = flag.String("service-name", SERVICE_NAME_EXAMPLE, "service name, need for service actions")
 	workingDir             = flag.String(WORKING_DIR_ARG_NAME, "", "Set working dir")
+	parallelAcmeRequests   = flag.Int("acme-parallel", 10, "count of parallel requests for acme server")
 )
 
 var (
@@ -239,8 +239,10 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 	cert, err = acmeService.CreateCertificate(domain)
 	if err == nil {
 		certificateCachePut(domain, cert)
+		return cert, nil
+	} else {
+		return nil, errors.New("Can't obtain acme certificate")
 	}
-	return cert, err
 }
 
 func getLocalIPs() (res []net.IP) {
@@ -431,7 +433,6 @@ func prepare() {
 	acmeService.privateKey = state.PrivateKey
 
 	acmeService.Init()
-	acmeService.RegisterEnsure(context.TODO())
 }
 
 func saveState(state stateStruct) {
@@ -485,7 +486,7 @@ func startListener() (*net.TCPListener, error) {
 	return listener, err
 }
 
-func usage(){
+func usage() {
 	flag.CommandLine.SetOutput(os.Stderr)
 
 	fmt.Fprintln(os.Stderr, "Version:", VERSION)

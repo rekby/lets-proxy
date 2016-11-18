@@ -59,7 +59,7 @@ readHeaderLines:
 			totalReadBytes += readBytes
 			if err != nil {
 				if err == io.EOF && totalReadBytes == 0 {
-					// pass - normal end connection.
+					logrus.Debugf("Normal close connection from '%v' to '%v', becouse eof and zero headers readed", sourceConn.RemoteAddr(), targetConn.RemoteAddr())
 				} else {
 					logrus.Infof("Error while read header from '%v': %v", sourceConn.RemoteAddr(), err)
 				}
@@ -239,7 +239,7 @@ func startProxyHTTP(targetConn net.Conn, sourceConn net.Conn) {
 		defer netbufPut(buf)
 
 		_, err := io.CopyBuffer(sourceConn, targetConn, buf)
-		logrus.Debugf("Connection closed with error '%v' -> '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), err)
+		logrus.Debugf("Connection closed with error1 '%v' -> '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), err)
 		sourceConn.Close()
 		targetConn.Close()
 	}()
@@ -262,6 +262,7 @@ func startProxyHTTP(targetConn net.Conn, sourceConn net.Conn) {
 					logrus.Debugf("Connection closed '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), bytesCopied, summBytesCopied, err)
 				}
 			} else {
+				logrus.Debugf("Start proxy without support keepalive middle headers '%v' -> '%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr())
 				bytesCopied, err := io.CopyBuffer(targetConn, sourceConn, buf)
 				summBytesCopied += bytesCopied
 				logrus.Debugf("Connection closed '%v' -> '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), bytesCopied, summBytesCopied, err)
@@ -281,7 +282,7 @@ func startProxyTCP(targetConn net.Conn, sourceConn net.Conn) {
 		defer netbufPut(buf)
 
 		_, err := io.CopyBuffer(targetConn, sourceConn, buf)
-		logrus.Debugf("Connection closed with error '%v' -> '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), err)
+		logrus.Debugf("Connection closed with error2 '%v' -> '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), err)
 		sourceConn.Close()
 		targetConn.Close()
 	}()
@@ -290,7 +291,7 @@ func startProxyTCP(targetConn net.Conn, sourceConn net.Conn) {
 		defer netbufPut(buf)
 
 		_, err := io.CopyBuffer(sourceConn, targetConn, buf)
-		logrus.Debugf("Connection closed with error '%v' -> '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), err)
+		logrus.Debugf("Connection closed with error3 '%v' -> '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), err)
 		sourceConn.Close()
 		targetConn.Close()
 	}()

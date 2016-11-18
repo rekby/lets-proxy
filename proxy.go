@@ -76,8 +76,6 @@ readHeaderLines:
 			if buf[i] == ':' || buf[i] == '\n' {
 				headerStart = buf[:i+1]
 				logrus.Debugf("Header Name '%v' -> '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), buf[:i])
-				targetConn.Close()
-				sourceConn.Close()
 				break
 			}
 		}

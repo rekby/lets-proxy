@@ -52,6 +52,7 @@ var (
 	serviceName            = flag.String("service-name", SERVICE_NAME_EXAMPLE, "service name, need for service actions")
 	workingDir             = flag.String(WORKING_DIR_ARG_NAME, "", "Set working dir")
 	parallelAcmeRequests   = flag.Int("acme-parallel", 10, "count of parallel requests for acme server")
+	timeToRenew            = flag.Duration("time-to-renew", time.Hour*24*30, "Time to end of certificate for background renew.")
 )
 
 var (
@@ -411,6 +412,7 @@ func prepare() {
 	}
 
 	acmeService = &acmeStruct{}
+	acmeService.timeToRenew = *timeToRenew
 	if *acmeTestServer {
 		acmeService.serverAddress = LETSENCRYPT_STAGING_API_URL
 	} else {

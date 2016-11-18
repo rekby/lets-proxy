@@ -27,16 +27,16 @@ const (
 )
 
 type acmeStruct struct {
-	serverAddress string
-	privateKey    *rsa.PrivateKey
-	acmePool      *acmeClientPool
-	timeToRenew   time.Duration
+	serverAddress         string
+	privateKey            *rsa.PrivateKey
+	acmePool              *acmeClientPool
+	timeToRenew           time.Duration
 
-	mutex *sync.Mutex
+	mutex                 *sync.Mutex
 
-	authDomainsMutex *sync.Mutex
-	authDomains      map[string]time.Time
-	obtainCerts      map[string]*sync.Mutex // sync for obtain only once certificate for the domain same time
+	authDomainsMutex      *sync.Mutex
+	authDomains           map[string]time.Time
+	backgroundCertsObtain map[string]*sync.Mutex // sync for obtain only once certificate for the domain same time
 }
 
 func (this *acmeStruct) authDomainCheck(domain string) bool {
@@ -111,7 +111,6 @@ func (this *acmeStruct) CreateCertificate(domain string) (cert *tls.Certificate,
 }
 
 func (this *acmeStruct) createCertificateAcme(ctx context.Context, domain string) (cert *tls.Certificate, err error) {
-
 	var auth *acmeapi.Authorization
 	client, err := this.acmePool.Get(ctx)
 	if client != nil {

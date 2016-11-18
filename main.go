@@ -223,8 +223,19 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 	switch {
 	case cert != nil && cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now()):
 		logrus.Warnf("Expired certificate got from cache for domain '%v'", domain)
-	// pass to create new certificate.
+		// pass to create new certificate.
+
 	case cert != nil:
+		// need for background cert renew
+		if cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now().Add(*timeToRenew)) {
+			go func(){
+				// TODO sync background cert renew for send only one request for every domain same time
+				newCert, err := acmeService.CreateCertificate(domain)
+				if err == nil {
+					certificateCachePut(domain, newCert)
+				}
+			}()
+		}
 		return cert, nil
 	default:
 		// pass

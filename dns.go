@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
 	"net"
@@ -10,8 +11,34 @@ import (
 )
 
 var (
-	localIPs []net.IP
+	localIPs           []net.IP
+	allowedDomainChars [255]bool
 )
+
+func init() {
+	for _, b := range []byte("1234567890qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM.-") {
+		allowedDomainChars[b] = true
+	}
+}
+
+func domainValidName(domain string) error {
+	if len(domain) == 0 {
+		return errors.New("Zero length domain name")
+	}
+	if domain[0] == '.' || domain[0] == '-' {
+		return errors.New("Bad start symbol")
+	}
+	if domain[len(domain)-1] == '-' {
+		return errors.New("Bad end symbol")
+	}
+
+	for _, byte := range []byte(domain) {
+		if !allowedDomainChars[byte] {
+			return errors.New("Bad symbol")
+		}
+	}
+	return nil
+}
 
 func domainHasLocalIP(ctx context.Context, domain string) bool {
 	var ipsChan = make(chan []net.IP, 1)
@@ -124,4 +151,3 @@ func getIPsFromDNS(ctx context.Context, domain, dnsServer string, recordType uin
 	logrus.Debugf("Receive answer from dns server '%v' for domain '%v' record type '%v' ips: '%v'", dnsServer, domain, dns.TypeToString[recordType], res)
 	return res
 }
-

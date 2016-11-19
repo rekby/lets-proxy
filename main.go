@@ -249,7 +249,7 @@ func acceptConnections(listener *net.TCPListener) {
 
 func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, err error) {
 	domain := clientHello.ServerName
-	err = domainCheck(domain)
+	err = domainValidName(domain)
 	if err != nil {
 		logrus.Warnf("Bad domain name '%v': %v", domain, err)
 		return nil, errors.New("Bad domain name")
@@ -301,31 +301,6 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 	} else {
 		return nil, errors.New("Can't obtain acme certificate")
 	}
-}
-
-func domainCheck(domain string) error {
-	if len(domain) == 0 {
-		return errors.New("Zero length domain name")
-	}
-	if domain[0] == '.' {
-		return errors.New("Domain start from dot")
-	}
-	domainBytes := []byte(domain)
-	for _, byte := range domainBytes {
-		switch {
-		case byte >= 'a' && byte <= 'z':
-			// pass
-		case byte >='A' && byte <= 'Z':
-			// pass
-		case byte >= '0' && byte <= '9':
-			// pass
-		case '.', '-':
-			// pass
-		default:
-			return errors.New("Bad symbol in domain name")
-		}
-	}
-	return nil
 }
 
 func getLocalIPs() (res []net.IP) {

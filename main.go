@@ -319,6 +319,8 @@ func domainCheck(domain string) error {
 			// pass
 		case byte >= '0' && byte <= '9':
 			// pass
+		case '.', '-':
+			// pass
 		default:
 			return errors.New("Bad symbol in domain name")
 		}

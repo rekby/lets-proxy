@@ -105,6 +105,11 @@
 			"Rev": "b699b7032584f0953262cb2788a0ca19bb494703"
 		},
 		{
+			"ImportPath": "gopkg.in/natefinch/lumberjack.v2",
+			"Comment": "v1.0-23-gdd45e6a",
+			"Rev": "dd45e6a67c53f673bb49ca8a001fd3a63ceb640e"
+		},
+		{
 			"ImportPath": "gopkg.in/square/go-jose.v1",
 			"Comment": "v1.1.0",
 			"Rev": "aa2e30fdd1fe9dd3394119af66451ae790d50e0d"

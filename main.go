@@ -12,7 +12,10 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/golang-lru"
 	"github.com/kardianos/service"
+	"gopkg.in/natefinch/lumberjack.v2"
+	"io"
 	"io/ioutil"
+	"math"
 	"net"
 	"os"
 	"regexp"
@@ -53,6 +56,11 @@ var (
 	workingDir             = flag.String(WORKING_DIR_ARG_NAME, "", "Set working dir")
 	parallelAcmeRequests   = flag.Int("acme-parallel", 10, "count of parallel requests for acme server")
 	timeToRenew            = flag.Duration("time-to-renew", time.Hour*24*30, "Time to end of certificate for background renew.")
+	logrotateTime          = flag.String("logrotate-time", "", "minutely|hourly|daily|weekly|monthly|yearly|\"\", empty or none mean no logrotate by time. Weekly - rotate log at midnight from sunday to monday")
+	logrotateSize          = flag.Int("logrotate-mb", 100, "logrotate by size in megabytes. 0 Mean no logrotate by size.")
+	logrotateMaxBackups    = flag.Int("logrotate-count", 30, "How many old backups keep. 0 mean infinite")
+	logrotateMaxAge        = flag.Int("logrotate-age", 30, "How many days keep old backups")
+	noLogStderr            = flag.Bool("no-log-stderr", false, "supress log to stderr")
 )
 
 var (
@@ -67,6 +75,12 @@ var (
 type stateStruct struct {
 	PrivateKey *rsa.PrivateKey
 	changed    bool
+}
+
+type nullWriter struct{}
+
+func (nullWriter) Write(buf []byte) (int, error) {
+	return len(buf), nil
 }
 
 func main() {
@@ -85,16 +99,42 @@ func main() {
 		return
 	}
 
+	logouts := []io.Writer{}
+	if !*noLogStderr {
+		logouts = append(logouts, os.Stderr)
+	}
+
 	if *logOutput != "-" {
-		fLog, err := os.OpenFile(*logOutput, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-		if fLog != nil {
-			defer fLog.Close()
+		lr := &lumberjack.Logger{
+			Filename:   *logOutput,
+			MaxSize:    *logrotateSize,
+			MaxAge:     *logrotateMaxAge,
+			MaxBackups: *logrotateMaxBackups,
+			LocalTime:  true,
 		}
+		if *logrotateSize == 0 {
+			lr.MaxSize = int(math.MaxInt32) // about 2 Petabytes. Really no reachable in this scenario.
+		}
+		defer lr.Close()
+
+		_, err := lr.Write([]byte{})
 		if err == nil {
-			logrus.SetOutput(fLog)
+			logouts = append(logouts, lr)
+			go startTimeLogRotator(lr)
 		} else {
-			logrus.Errorf("Can't open logfile '%v': %v", *logOutput, err)
+			logrus.Errorf("Can't log to file '%v': %v", *logOutput, err)
 		}
+	}
+
+	// setlogout
+	switch len(logouts) {
+	case 0:
+
+		logrus.SetOutput(nullWriter{})
+	case 1:
+		logrus.SetOutput(logouts[0])
+	default:
+		logrus.SetOutput(io.MultiWriter(logouts...))
 	}
 
 	prepare()
@@ -228,7 +268,7 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 	case cert != nil:
 		// need for background cert renew
 		if cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now().Add(*timeToRenew)) {
-			go func(){
+			go func() {
 				// TODO sync background cert renew for send only one request for every domain same time
 				newCert, err := acmeService.CreateCertificate(domain)
 				if err == nil {
@@ -497,6 +537,40 @@ func startListener() (*net.TCPListener, error) {
 		logrus.Errorf("Can't start listen on '%v': %v", tcpAddr, err)
 	}
 	return listener, err
+}
+
+func startTimeLogRotator(logger *lumberjack.Logger){
+	for {
+		now := time.Now()
+		var sleepUntil time.Time
+		switch *logrotateTime {
+		case "","none":
+			return // no rotate by time
+		case "minutely":
+			sleepUntil = time.Date(now.Year(), now.Month(), now.Day(),now.Hour(),now.Minute()+1,0,0, time.Local)
+		case "hourly":
+			sleepUntil = time.Date(now.Year(), now.Month(), now.Day(),now.Hour()+1,0,0,0, time.Local)
+		case "daily":
+			sleepUntil = time.Date(now.Year(), now.Month(), now.Day()+1,0,0,0,0, time.Local)
+		case "weekly":
+			sleepUntil := now.AddDate(0,0,-int(now.Weekday()) + int(time.Monday)) // Set to this week monday
+			sleepUntil = time.Date(sleepUntil.Year(), sleepUntil.Month(), sleepUntil.Day(),0,0,0,0, time.Local) // set to midnight
+			if sleepUntil.Before(now) {
+				sleepUntil = sleepUntil.AddDate(0,0,7)
+			}
+		case "monthly":
+			sleepUntil = time.Date(now.Year(), now.Month()+1, 1,0,0,0,0,time.Local)
+		case "yearly":
+			sleepUntil = time.Date(now.Year()+1, 1,1, 0,0,0,0,time.Local)
+		default:
+			logrus.Errorf("Doesn't know logrotate time interval: '%v'. Turn off time rotation.", *logrotateTime)
+			return
+		}
+
+		time.Sleep(sleepUntil.Sub(now))
+		logrus.Info("Rotate log:", *logrotateTime)
+		logger.Rotate()
+	}
 }
 
 func usage() {

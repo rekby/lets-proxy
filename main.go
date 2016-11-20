@@ -395,12 +395,12 @@ func getLocalIPs() (res []net.IP) {
 func getTargetAddr(in *net.TCPConn) (net.TCPAddr, error) {
 	var target net.TCPAddr
 	if paramTargetTcpAddr.IP == nil || paramTargetTcpAddr.IP.IsUnspecified() {
-		sourceAddr, ok := in.RemoteAddr().(*net.TCPAddr)
+		receiveAddr, ok := in.LocalAddr().(*net.TCPAddr)
 		if !ok {
 			logrus.Errorf("Can't cast incoming addr to tcp addr: '%v'", in.LocalAddr())
 			return net.TCPAddr{}, errors.New("Can't cast incoming addr to tcp addr")
 		}
-		target.IP = sourceAddr.IP
+		target.IP = receiveAddr.IP
 		target.Port = paramTargetTcpAddr.Port
 	} else {
 		target.IP = paramTargetTcpAddr.IP

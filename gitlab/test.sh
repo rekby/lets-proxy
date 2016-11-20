@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 #yum install -y iproute
 
 echo "install golang"
@@ -26,7 +25,10 @@ echo
 DOMAIN="gitlab-test.1gb.ru"
 
 TMP_SUBDOMAIN="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM.ya"
+TMP_SUBDOMAIN2="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM-2.ya"
+
 TMP_DOMAIN="$TMP_SUBDOMAIN.$DOMAIN"
+TMP_DOMAIN2="$TMP_SUBDOMAIN2.$DOMAIN"
 
 echo "Tmp domain: $TMP_DOMAIN"
 
@@ -36,10 +38,16 @@ tar -zxvf ypdd-linux-amd64.tar.gz
 MY_IPv6=`curl -s6 http://ifconfig.io/ip 2>/dev/null`
 echo MY IPv6: ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN} AAAA ${MY_IPv6}
+./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN2} AAAA ${MY_IPv6}
 
 function delete_domain(){
     echo "Delete record"
     ID=`./ypdd ${DOMAIN} list | grep ${TMP_SUBDOMAIN} | cut -d ' ' -f 1`
+    echo "ID: $ID"
+    ./ypdd $DOMAIN del $ID
+
+    echo "Delete record-2"
+    ID=`./ypdd ${DOMAIN} list | grep ${TMP_SUBDOMAIN2} | cut -d ' ' -f 1`
     echo "ID: $ID"
     ./ypdd $DOMAIN del $ID
 }
@@ -48,7 +56,7 @@ go build -o proxy github.com/rekby/lets-proxy
 
 echo "Start proxy interactive - for view full log"
 
-./proxy --test --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https &
+./proxy --test --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https --logout=log.txt &
 #./proxy &  ## REAL CERT. WARNING - LIMITED CERT REQUEST
 
 sleep 10 # Allow to start, generate keys, etc.
@@ -109,5 +117,20 @@ find /etc -name '*lets-proxy*'
 
 ./proxy --test --service-name=lets-proxy --service-action=uninstall
 
+
+echo "Test obtain only one cert for every domain same time"
+echo > log.txt
+
+for i in `seq 1 10`; do
+    A=`curl https://${TMP_DOMAIN2} >/dev/null 2>&1 &`
+done
+curl https://${TMP_DOMAIN2} >/dev/null 2>&1 # Wait answer
+
+CERTS_OBTAINED=`cat log.txt | grep "BEGIN CERTIFICATE" | wc -l`
+if [ "${CERTS_OBTAINED}" != "1" ]; then
+    echo "Must be only one cert obtained. But obtained: ${CERTS_OBTAINED}"
+    delete_domain
+    exit 1
+fi
 
 delete_domain

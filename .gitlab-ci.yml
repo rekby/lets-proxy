@@ -2,4 +2,4 @@ build:
   tags:
     - docker
   script:
-    - ./gitlab/test.sh
+    - bash +x ./gitlab/test.sh

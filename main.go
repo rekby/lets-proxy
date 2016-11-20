@@ -614,7 +614,7 @@ func startListener() (*net.TCPListener, error) {
 	if err != nil {
 		logrus.Panicf("Can't resolve bind-to address '%v': %v", *bindTo, err)
 	}
-	logrus.Errorf("Start listen: %v", tcpAddr)
+	logrus.Infof("Start listen: %v", tcpAddr)
 
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	if err != nil {

@@ -342,7 +342,7 @@ checkCertInCache:
 	// check if certificate obtained between check cache and check obtaining lock
 	cert = certificateCacheGet(domain) // check if cert obtained before lock
 	if cert != nil && cert.Leaf.NotAfter.Before(now) {
-		return cert
+		return cert, nil
 	}
 
 	for _, re := range nonCertDomainsRegexps {

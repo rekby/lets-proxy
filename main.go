@@ -277,24 +277,38 @@ checkCertInCache:
 
 		switch {
 		case cert != nil && cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now()):
+			// pass to obtain cert
 			logrus.Warnf("Expired certificate got from cache for domain '%v'", domain)
-		// pass to create new certificate.
 
 		case cert != nil:
 			// need for background cert renew
 			if cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now().Add(*timeToRenew)) {
 				go func() {
-					// TODO sync background cert renew for send only one request for every domain same time
+					certDomainsObtainingMutex.Lock()
+					obtainInProcess := certDomainsObtaining[domain]
+					if !obtainInProcess {
+						certDomainsObtaining[domain] = true
+						defer func() {
+							certDomainsObtainingMutex.Lock()
+							delete(certDomainsObtaining, domain)
+							certDomainsObtainingMutex.Unlock()
+						}()
+					}
+					certDomainsObtainingMutex.Unlock()
+
+					if obtainInProcess {
+						return
+					}
+
 					newCert, err := acmeService.CreateCertificate(domain)
 					if err == nil {
 						certificateCachePut(domain, newCert)
 					}
 				}()
 			}
-			err = nil
-			break checkCertInCache
+			return cert, nil
 		default:
-			// pass
+			// pass to obtain cert
 		}
 
 		// Check if the domain in process already
@@ -308,7 +322,7 @@ checkCertInCache:
 
 		if needWait {
 			// wait, then cert in cache again
-			logrus.Info("Obtain certificate in process for domain '%v', wait a second and check it again", domain)
+			logrus.Infof("Obtain certificate in process for domain '%v', wait a second and check it again", domain)
 			time.Sleep(time.Second)
 			continue checkCertInCache
 		} else {

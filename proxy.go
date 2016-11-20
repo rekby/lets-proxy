@@ -58,11 +58,7 @@ readHeaderLines:
 			readBytes, err := sourceConn.Read(buf[i : i+1])
 			totalReadBytes += readBytes
 			if err != nil {
-				if err == io.EOF && totalReadBytes == 0 {
-					logrus.Debugf("Normal close connection from '%v' to '%v', becouse eof and zero headers readed", sourceConn.RemoteAddr(), targetConn.RemoteAddr())
-				} else {
-					logrus.Infof("Error while read header from '%v': %v", sourceConn.RemoteAddr(), err)
-				}
+				logrus.Debugf("Error while read header from '%v': %v", sourceConn.RemoteAddr(), err)
 				targetConn.Close()
 				sourceConn.Close()
 				return

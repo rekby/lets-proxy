@@ -104,11 +104,6 @@ else
     exit 1
 fi
 
-echo "Kill proxy"
-PID=`ps aux | grep proxy | awk '{print $2}'`
-kill -9 ${PID}
-sleep 1
-
 echo "Test install proxy"
 ./proxy --test --service-name=lets-proxy --service-action=install
 ./proxy --test --service-name=lets-proxy --service-action=reinstall

@@ -272,12 +272,13 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 		return acmeService.CreateCertificate(domain)
 	}
 
+	now := time.Now()
 checkCertInCache:
 	for {
 		cert = certificateCacheGet(domain)
 
 		switch {
-		case cert != nil && cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now()):
+		case cert != nil && cert.Leaf.NotAfter.Before(now):
 			// pass to obtain cert
 			logrus.Warnf("Expired certificate got from cache for domain '%v'", domain)
 
@@ -314,6 +315,7 @@ checkCertInCache:
 
 		// Check if the domain in process already
 		certDomainsObtainingMutex.Lock()
+
 		needWait := certDomainsObtaining[domain]
 		if !needWait {
 			// other requests will wait
@@ -336,6 +338,12 @@ checkCertInCache:
 		delete(certDomainsObtaining, domain)
 		certDomainsObtainingMutex.Unlock()
 	}()
+
+	// check if certificate obtained between check cache and check obtaining lock
+	cert = certificateCacheGet(domain) // check if cert obtained before lock
+	if cert != nil && cert.Leaf.NotAfter.Before(now) {
+		return cert
+	}
 
 	for _, re := range nonCertDomainsRegexps {
 		if re.MatchString(domain) {

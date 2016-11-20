@@ -16,6 +16,7 @@ var (
 	certMemCache *lru.Cache
 )
 
+// Must return valid certificate with non nil cert.Leaf or return nil
 func certificateCacheGet(domain string) *tls.Certificate {
 	if certMemCache != nil {
 		certP, ok := certMemCache.Get(domain)

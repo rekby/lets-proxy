@@ -19,9 +19,10 @@ import (
 	"net"
 	"os"
 	"regexp"
-	"strings"
-	"time"
 	"runtime"
+	"strings"
+	"sync"
+	"time"
 )
 
 const (
@@ -71,6 +72,9 @@ var (
 	additionalHeaders     []byte          // prepared additional headers
 	acmeService           *acmeStruct
 	nonCertDomainsRegexps []*regexp.Regexp
+
+	certDomainsObtaining      = make(map[string]bool)
+	certDomainsObtainingMutex = &sync.Mutex{}
 )
 
 type stateStruct struct {
@@ -267,28 +271,56 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 		return acmeService.CreateCertificate(domain)
 	}
 
-	cert = certificateCacheGet(domain)
+checkCertInCache:
+	for {
+		cert = certificateCacheGet(domain)
 
-	switch {
-	case cert != nil && cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now()):
-		logrus.Warnf("Expired certificate got from cache for domain '%v'", domain)
+		switch {
+		case cert != nil && cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now()):
+			logrus.Warnf("Expired certificate got from cache for domain '%v'", domain)
 		// pass to create new certificate.
 
-	case cert != nil:
-		// need for background cert renew
-		if cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now().Add(*timeToRenew)) {
-			go func() {
-				// TODO sync background cert renew for send only one request for every domain same time
-				newCert, err := acmeService.CreateCertificate(domain)
-				if err == nil {
-					certificateCachePut(domain, newCert)
-				}
-			}()
+		case cert != nil:
+			// need for background cert renew
+			if cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now().Add(*timeToRenew)) {
+				go func() {
+					// TODO sync background cert renew for send only one request for every domain same time
+					newCert, err := acmeService.CreateCertificate(domain)
+					if err == nil {
+						certificateCachePut(domain, newCert)
+					}
+				}()
+			}
+			err = nil
+			break checkCertInCache
+		default:
+			// pass
 		}
-		return cert, nil
-	default:
-		// pass
+
+		// Check if the domain in process already
+		certDomainsObtainingMutex.Lock()
+		needWait := certDomainsObtaining[domain]
+		if !needWait {
+			// other requests will wait
+			certDomainsObtaining[domain] = true
+		}
+		certDomainsObtainingMutex.Unlock()
+
+		if needWait {
+			// wait, then cert in cache again
+			logrus.Info("Obtain certificate in process for domain '%v', wait a second and check it again", domain)
+			time.Sleep(time.Second)
+			continue checkCertInCache
+		} else {
+			break checkCertInCache
+		}
 	}
+
+	defer func() {
+		certDomainsObtainingMutex.Lock()
+		delete(certDomainsObtaining, domain)
+		certDomainsObtainingMutex.Unlock()
+	}()
 
 	for _, re := range nonCertDomainsRegexps {
 		if re.MatchString(domain) {
@@ -300,10 +332,11 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 	cert, err = acmeService.CreateCertificate(domain)
 	if err == nil {
 		certificateCachePut(domain, cert)
-		return cert, nil
 	} else {
 		return nil, errors.New("Can't obtain acme certificate")
 	}
+
+	return cert, err
 }
 
 func getLocalIPs() (res []net.IP) {
@@ -548,29 +581,29 @@ func startListener() (*net.TCPListener, error) {
 	return listener, err
 }
 
-func startTimeLogRotator(logger *lumberjack.Logger){
+func startTimeLogRotator(logger *lumberjack.Logger) {
 	for {
 		now := time.Now()
 		var sleepUntil time.Time
 		switch *logrotateTime {
-		case "","none":
+		case "", "none":
 			return // no rotate by time
 		case "minutely":
-			sleepUntil = time.Date(now.Year(), now.Month(), now.Day(),now.Hour(),now.Minute()+1,0,0, time.Local)
+			sleepUntil = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute()+1, 0, 0, time.Local)
 		case "hourly":
-			sleepUntil = time.Date(now.Year(), now.Month(), now.Day(),now.Hour()+1,0,0,0, time.Local)
+			sleepUntil = time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.Local)
 		case "daily":
-			sleepUntil = time.Date(now.Year(), now.Month(), now.Day()+1,0,0,0,0, time.Local)
+			sleepUntil = time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.Local)
 		case "weekly":
-			sleepUntil := now.AddDate(0,0,-int(now.Weekday()) + int(time.Monday)) // Set to this week monday
-			sleepUntil = time.Date(sleepUntil.Year(), sleepUntil.Month(), sleepUntil.Day(),0,0,0,0, time.Local) // set to midnight
+			sleepUntil := now.AddDate(0, 0, -int(now.Weekday())+int(time.Monday))                                   // Set to this week monday
+			sleepUntil = time.Date(sleepUntil.Year(), sleepUntil.Month(), sleepUntil.Day(), 0, 0, 0, 0, time.Local) // set to midnight
 			if sleepUntil.Before(now) {
-				sleepUntil = sleepUntil.AddDate(0,0,7)
+				sleepUntil = sleepUntil.AddDate(0, 0, 7)
 			}
 		case "monthly":
-			sleepUntil = time.Date(now.Year(), now.Month()+1, 1,0,0,0,0,time.Local)
+			sleepUntil = time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.Local)
 		case "yearly":
-			sleepUntil = time.Date(now.Year()+1, 1,1, 0,0,0,0,time.Local)
+			sleepUntil = time.Date(now.Year()+1, 1, 1, 0, 0, 0, 0, time.Local)
 		default:
 			logrus.Errorf("Doesn't know logrotate time interval: '%v'. Turn off time rotation.", *logrotateTime)
 			return

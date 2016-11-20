@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"runtime"
 )
 
 const (
@@ -100,7 +101,10 @@ func main() {
 	}
 
 	logouts := []io.Writer{}
-	if !*noLogStderr {
+	if *noLogStderr || // force ignore stderr by flag
+		!service.Interactive() && runtime.GOOS == "windows" { // Run as windows-service
+		// pass
+	} else {
 		logouts = append(logouts, os.Stderr)
 	}
 
@@ -129,7 +133,6 @@ func main() {
 	// setlogout
 	switch len(logouts) {
 	case 0:
-
 		logrus.SetOutput(nullWriter{})
 	case 1:
 		logrus.SetOutput(logouts[0])

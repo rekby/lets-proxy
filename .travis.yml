@@ -6,7 +6,6 @@ gobuild_args: --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\""
 script: echo "Deploy only, tested on own gitlab becouse travis incoming connect restrictions."
 
 before_deploy:
-  - apt-get install dos2unix
   - mkdir release
   - cp README.md README.txt
   - 'GOARCH=386 GOOS=linux go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\"" -o lets-proxy; tar -zcf release/lets-proxy-linux-i386.tar.gz lets-proxy README.txt'

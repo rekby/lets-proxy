@@ -39,7 +39,7 @@ const (
 
 var (
 	bindTo                 = flag.String("bind-to", ":443", "")
-	targetPort             = flag.Int("target-port", 80, "")
+	targetConnString       = flag.String("target", ":80", "IP, :port or IP:port. Default port is 80. Default IP - same which receive connection.")
 	targetConnTimeout      = flag.Duration("target-conn-timeout", time.Second, "")
 	acmeApiUrl             = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
 	acmeTestServer         = flag.Bool("test", false, "Use test lets encrypt server instead of <acme-server>")
@@ -72,6 +72,7 @@ var (
 	additionalHeaders     []byte          // prepared additional headers
 	acmeService           *acmeStruct
 	nonCertDomainsRegexps []*regexp.Regexp
+	paramTargetTcpAddr         *net.TCPAddr
 
 	certDomainsObtaining      = make(map[string]bool)
 	certDomainsObtainingMutex = &sync.Mutex{}
@@ -383,20 +384,27 @@ func getLocalIPs() (res []net.IP) {
 	return res
 }
 
-func getTargetConn(in *net.TCPConn) (net.TCPAddr, error) {
-	targetAddrP, err := net.ResolveTCPAddr("tcp", in.LocalAddr().String())
-	if err != nil {
-		logrus.Errorf("Can't resolve local addr '%v': %v", in.LocalAddr().String(), err)
-		return net.TCPAddr{}, err
+func getTargetAddr(in *net.TCPConn) (net.TCPAddr, error) {
+	var target net.TCPAddr
+	if paramTargetTcpAddr.IP == nil || paramTargetTcpAddr.IP.IsUnspecified() {
+		sourceAddr, ok := in.RemoteAddr().(*net.TCPAddr)
+		if !ok {
+			logrus.Errorf("Can't cast incoming addr to tcp addr: '%v'", in.LocalAddr())
+			return net.TCPAddr{}, errors.New("Can't cast incoming addr to tcp addr")
+		}
+		target.IP = sourceAddr.IP
+		target.Port = paramTargetTcpAddr.Port
+	} else {
+		target.IP = paramTargetTcpAddr.IP
+		target.Port = paramTargetTcpAddr.Port
 	}
-	targetAddrP.Port = *targetPort
-	return *targetAddrP, nil
+	return target, nil
 }
 
 func handleTcpConnection(in *net.TCPConn) {
-	target, err := getTargetConn(in)
+	target, err := getTargetAddr(in)
 	if err != nil {
-		logrus.Errorf("Can't get target IP/port for '%v': %v", target.String(), err)
+		logrus.Errorf("Can't get target IP/port for '%v': %v", in.RemoteAddr(), err)
 		return
 	}
 
@@ -505,6 +513,18 @@ func prepare() {
 
 	workingDir, err := os.Getwd()
 	logrus.Infof("Working dir '%v', err: %v", workingDir, err)
+
+	// targetConn
+	targetAddrS := *targetConnString
+	if !strings.ContainsRune(*targetConnString, ':') || // doesn't contain colon (only ipv4 or domain name)
+		len(*targetConnString) > 0 && (*targetConnString)[len(*targetConnString)-1] == ']' { // is ipv6 only, without port
+		targetAddrS += ":80"
+	}
+	paramTargetTcpAddr, err = net.ResolveTCPAddr("tcp", targetAddrS)
+	if err != nil {
+		logrus.Panicf("Can't resolve target addr '%v': %v", targetConnString, err)
+	}
+	logrus.Info("Target addr: ", paramTargetTcpAddr)
 
 	// init service
 	var state stateStruct

@@ -72,7 +72,7 @@ var (
 	additionalHeaders     []byte          // prepared additional headers
 	acmeService           *acmeStruct
 	nonCertDomainsRegexps []*regexp.Regexp
-	paramTargetTcpAddr         *net.TCPAddr
+	paramTargetTcpAddr    *net.TCPAddr
 
 	certDomainsObtaining      = make(map[string]bool)
 	certDomainsObtainingMutex = &sync.Mutex{}
@@ -151,11 +151,21 @@ func main() {
 	if *workingDir == "" {
 		wd, _ := os.Getwd()
 		serviceArguments = append([]string{"--" + WORKING_DIR_ARG_NAME + "=" + wd}, os.Args[1:]...)
-		logrus.Debug("Change service arguments to:", serviceArguments)
 	} else {
 		serviceArguments = os.Args[1:]
 	}
 
+	// remove --service-action argument
+	newServiceArguments := make([]string, 0, len(serviceArguments))
+	for _, arg := range serviceArguments {
+		if strings.HasPrefix(arg, "--service-action=") {
+			continue
+		}
+		newServiceArguments = append(newServiceArguments, arg)
+	}
+	serviceArguments = newServiceArguments
+
+	logrus.Debug("Service arguments:", serviceArguments)
 	svcConfig := &service.Config{
 		Name:        *serviceName,
 		Description: "Reverse proxy for handle ssl/https requests",

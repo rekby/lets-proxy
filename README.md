@@ -8,6 +8,17 @@ of remote client and X-Forwarded-Proto=https - for https detection.
 It have tcp mode, that doesn't parse traffic and proxy it as usual tcp-connection without modify. Use --help key for details.
 
     ./lets-proxy или lets-proxy.exe
+    
+Install for autostart (daemon for linux or windows-service for linux)
+    
+    ./lets-proxy --service-name=lets-proxy --service-action=install
+    lets-proxy.exe --service-name=lets-proxy --service-action=install
+    
+
+Remove from autostart
+
+    ./lets-proxy --service-name=lets-proxy --service-action=uninstall
+    lets-proxy.exe --service-name=lets-proxy --service-action=uninstall
 
 
 Русский (Russian):
@@ -22,4 +33,15 @@ It have tcp mode, that doesn't parse traffic and proxy it as usual tcp-connectio
 Быстрый старт:
 
     ./lets-proxy или lets-proxy.exe
+
+Установить в автозапуск (домен в linux, служба в windows)
+    
+    ./lets-proxy --service-name=lets-proxy --service-action=install
+    lets-proxy.exe --service-name=lets-proxy --service-action=install
+    
+
+Удалить из автозапуска
+
+    ./lets-proxy --service-name=lets-proxy --service-action=uninstall
+    lets-proxy.exe --service-name=lets-proxy --service-action=uninstall
 

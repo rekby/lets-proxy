@@ -44,7 +44,7 @@ var (
 	acmeApiUrl             = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
 	acmeTestServer         = flag.Bool("test", false, "Use test lets encrypt server instead of <acme-server>")
 	certDir                = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
-	certMemCount           = flag.Int("in-memory-cnt", 10000, "How many count of certs cache in memory for prevent parse it from file")
+	certMemCount           = flag.Int("in-memory-cnt", 100, "How many count of certs cache in memory for prevent parse it from file")
 	stateFilePath          = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
 	proxyMode              = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
 	httpRealIPHeader       = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")

@@ -16,6 +16,7 @@ func TestIPContains(t *testing.T){
 	var slice ipSlice
 
 	slice = []net.IP{}
+	sort.Sort(slice)
 	if ipContains(slice, nil) {
 		t.Error()
 	}
@@ -23,6 +24,7 @@ func TestIPContains(t *testing.T){
 	slice = []net.IP{
 		net.ParseIP("1.2.3.4"),
 	}
+	sort.Sort(slice)
 	if ipContains(slice, net.ParseIP("")) {
 		t.Error()
 	}
@@ -30,6 +32,7 @@ func TestIPContains(t *testing.T){
 	slice = []net.IP{
 		net.ParseIP("1.2.3.4"),
 	}
+	sort.Sort(slice)
 	if !ipContains(slice, net.ParseIP("1.2.3.4")) {
 		t.Error()
 	}
@@ -42,7 +45,6 @@ func TestIPContains(t *testing.T){
 		net.ParseIP("fe80::42:acff:fe11:2"),
 	}
 	sort.Sort(slice)
-	t.Log(slice)
 	if !ipContains(slice, net.ParseIP("2001:470:28:177:0:242:ac11:2")) {
 		t.Error()
 	}

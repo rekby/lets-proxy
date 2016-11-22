@@ -1,13 +1,13 @@
 Русскоязычное описание ниже (Russian below).
 
-English:
-Revers-proxy server for handle https-requests. For start start it on server with http-server. Defaults lets-proxy handle 
-https requests from port 443 and proxy it as http to port 80 with same IP. It add to http headers: X-Real-IP with ip address
+English description:
+Reverse-proxy server to handle https-requests. Requires existing http-server at the same server. By default `lets-proxy` handles
+https requests to port 443 and proxies them as http to port 80 with same IP. It adds http header: X-Real-IP with ip address
 of remote client and X-Forwarded-Proto=https - for https detection.
 
-It have tcp mode, that doesn't parse traffic and proxy it as usual tcp-connection without modify. Use --help key for details.
+It has tcp mode, that doesn't parse traffic and proxy it as usual tcp-connection without modify. Use --help key for details.
 
-    ./lets-proxy или lets-proxy.exe
+    ./lets-proxy or lets-proxy.exe
     
 Install for autostart (daemon for linux or windows-service for linux)
     

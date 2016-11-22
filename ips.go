@@ -5,7 +5,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"net"
 	"sort"
-	"sync"
+	"sync/atomic"
 )
 
 type ipSlice []net.IP
@@ -25,15 +25,18 @@ func (slice ipSlice) Swap(a, b int) {
 }
 
 var (
-	globalAllowedIPs ipSlice
-	allowIPsMutex    = &sync.Mutex{}
+	globalAllowedIPs atomic.Value
 )
 
-func getAllowIPs() ipSlice {
-	return globalAllowedIPs
+func init(){
+	globalAllowedIPs.Store(ipSlice{})
 }
 
-func getLocalIPs() (res []net.IP) {
+func getAllowIPs() ipSlice {
+	return globalAllowedIPs.Load().(ipSlice)
+}
+
+func getLocalIPs() (res ipSlice) {
 	bindAddr, _ := net.ResolveTCPAddr("tcp", *bindTo)
 	if bindAddr.IP.IsUnspecified() || len(bindAddr.IP) == 0 {
 		addresses, err := net.InterfaceAddrs()
@@ -64,8 +67,9 @@ func getLocalIPs() (res []net.IP) {
 }
 
 func initAllowedIPs() {
-	globalAllowedIPs = getLocalIPs()
-	sort.Sort(globalAllowedIPs)
+	var localIPs = getLocalIPs()
+	sort.Sort(localIPs)
+	globalAllowedIPs.Store(localIPs)
 }
 
 func ipCompare(a, b net.IP) int {

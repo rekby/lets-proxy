@@ -58,7 +58,7 @@ func domainHasLocalIP(ctx context.Context, domain string) bool {
 		} else {
 			logrus.Warnf("Can't local lookup ip for domain '%v': %v", domain, err)
 		}
-		logrus.Debugf("Receive answer from local lookup for domain '%v' record type '%v' ips: '%v'", domain, ips)
+		logrus.Debugf("Receive answer from local lookup for domain '%v' ips: '%v'", domain, ips)
 		dnsRequests.Done()
 	}()
 

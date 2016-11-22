@@ -15,7 +15,7 @@ func (slice ipSlice) Len() int {
 }
 
 func (slice ipSlice) Less(a, b int) bool {
-	return compareIPs(slice[a], slice[b]) == -1
+	return ipCompare(slice[a], slice[b]) == -1
 }
 
 func (slice ipSlice) Swap(a, b int) {
@@ -28,21 +28,6 @@ var (
 	globalAllowedIPs ipSlice
 	allowIPsMutex    = &sync.Mutex{}
 )
-
-func compareIPs(a, b net.IP) int {
-	switch {
-	case len(a) == 0 && len(b) == 0:
-		return 0
-	case len(a) < len(b):
-		return -1
-	case len(a) > len(b):
-		return 1
-	case a.Equal(b):
-		return 0
-	default:
-		return bytes.Compare([]byte(a), []byte(b))
-	}
-}
 
 func getAllowIPs() ipSlice {
 	return globalAllowedIPs
@@ -83,11 +68,35 @@ func initAllowedIPs() {
 	sort.Sort(globalAllowedIPs)
 }
 
+func ipCompare(a, b net.IP) int {
+	// normalize ips
+	if ipv4 := a.To4(); ipv4 != nil {
+		a = ipv4
+	}
+	if ipv4 := b.To4(); ipv4 != nil {
+		b = ipv4
+	}
+
+	switch {
+	case len(a) == 0 && len(b) == 0:
+		return 0
+	case len(a) < len(b):
+		return -1
+	case len(a) > len(b):
+		return 1
+	case a.Equal(b):
+		return 0
+	default:
+		return bytes.Compare([]byte(a), []byte(b))
+	}
+}
+
+
+// slice must be sorted
 func ipContains(slice ipSlice, ip net.IP)bool{
-	ips := getAllowIPs()
-	index := sort.Search(len(ips), func(n int) bool { return compareIPs(ip, ips[n]) >= 0 })
-	if index == len(ips) {
+	index := sort.Search(len(slice), func(n int) bool { return ipCompare(slice[n], ip) >= 0 })
+	if index == len(slice) {
 		return false
 	}
-	return compareIPs(ip, ips[index]) == 0
+	return ipCompare(ip, slice[index]) == 0
 }

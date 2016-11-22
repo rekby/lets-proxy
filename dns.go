@@ -11,7 +11,6 @@ import (
 )
 
 var (
-	localIPs           []net.IP
 	allowedDomainChars [255]bool
 )
 
@@ -91,21 +90,15 @@ func domainHasLocalIP(ctx context.Context, domain string) bool {
 	}()
 
 	hasIP := false
+	allowIPs := getAllowIPs()
 	for ips := range ipsChan {
 		if len(ips) > 0 {
 			hasIP = true
 		}
 		for _, ip := range ips {
-			isLocalIP := false
-			for _, localIP := range localIPs {
-				if ip.Equal(localIP) {
-					isLocalIP = true
-					break
-				}
-			}
 			// If domain has ip doesn't that doesn't bind to the server
-			if !isLocalIP {
-				logrus.Debugf("Domain have ip of other server. Domain '%v', Domain ips: '%v', Server ips: '%v'", domain, ips, localIPs)
+			if !ipContains(allowIPs, ip) {
+				logrus.Debugf("Domain have ip of other server. Domain '%v', Domain ips: '%v', Server ips: '%v'", domain, ips, allowIPs)
 				return false
 			}
 		}

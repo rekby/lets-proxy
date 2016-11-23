@@ -5,7 +5,7 @@ Reverse-proxy server to handle https-requests. Requires existing http-server at 
 https requests to port 443 and proxies them as http to port 80 with same IP. It adds http header: X-Real-IP with ip address
 of remote client and X-Forwarded-Proto=https - for https detection.
 
-It has tcp mode, that doesn't parse traffic and proxy it as usual tcp-connection without modify. Use --help key for details.
+It has tcp mode, that doesn't parse traffic and proxy it as usual tcp-connection without modify.
 
     ./lets-proxy or lets-proxy.exe
     
@@ -20,6 +20,10 @@ Remove from autostart
     ./lets-proxy --service-name=lets-proxy --service-action=uninstall
     lets-proxy.exe --service-name=lets-proxy --service-action=uninstall
 
+Use --help key for details:
+
+    ./lets-proxy --help or lets-proxy.exe --help
+
 
 Русский (Russian):
 Реверс-прокси сервер для обработки https-запросов. Для начала использования достаточно просто запустить его на сервере с 
@@ -28,7 +32,7 @@ Remove from autostart
 что запрос пришел по https.
 
 Есть режим tcp-прокси, в этом случае входящий трафик никак не анализируется и не меняется, а просто передается на указанный порт, но
-уже в расшифрованном виде. Для подробной справки по параметрам используйте параметр --help
+уже в расшифрованном виде.
 
 Быстрый старт:
 
@@ -45,3 +49,6 @@ Remove from autostart
     ./lets-proxy --service-name=lets-proxy --service-action=uninstall
     lets-proxy.exe --service-name=lets-proxy --service-action=uninstall
 
+Для получения подробной справки воспользуйтесь --help:
+
+    ./lets-proxy --help or lets-proxy.exe --help

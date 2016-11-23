@@ -261,10 +261,12 @@ func isPublicIp(ip net.IP) bool {
 func parseNet(s string) net.IPNet {
 	_, ipnet, err := net.ParseCIDR(s)
 	if err != nil {
-		panic(err)
+		logrus.Errorf("Can't parse cidr '%v': %v", s, err)
+		return  net.IPNet{}
 	}
 	if ipnet == nil {
-		panic("ipnet == nil: " + s)
+		logrus.Error("Can't parse cidr '%v', nil result.", s)
+		return  net.IPNet{}
 	}
 	return *ipnet
 }

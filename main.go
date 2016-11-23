@@ -263,7 +263,7 @@ func acceptConnections(listener *net.TCPListener) {
 	for {
 		tcpConn, err := listener.AcceptTCP()
 		if err != nil {
-			logrus.Error("Can't accept tcp connection: ", err)
+			logrus.Warn("Can't accept tcp connection: ", err)
 		}
 		go handleTcpConnection(tcpConn)
 	}

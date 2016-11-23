@@ -90,7 +90,7 @@ func getIpByExternalRequest() (res ipSlice) {
 		}
 		client.Timeout = *getIPByExternalRequestTimeout
 		resp, err := client.Get("http://ifconfig.io/ip")
-		if resp.Body != nil {
+		if resp != nil && resp.Body != nil {
 			defer resp.Body.Close()
 		}
 		if err != nil {

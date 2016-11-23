@@ -94,12 +94,12 @@ func getIpByExternalRequest() (res ipSlice) {
 			defer resp.Body.Close()
 		}
 		if err != nil {
-			logrus.Errorf("Can't request to http://ifconfig.io/ip (%v): %v", network, err)
+			logrus.Debugf("Can't request to http://ifconfig.io/ip (%v): %v", network, err)
 			return nil
 		}
 		respBytes, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			logrus.Errorf("Can't read response from http://ifconfig.io/ip (%v): %v", network, err)
+			logrus.Debugf("Can't read response from http://ifconfig.io/ip (%v): %v", network, err)
 			return nil
 		}
 		ip := net.ParseIP(strings.TrimSpace(string(respBytes)))

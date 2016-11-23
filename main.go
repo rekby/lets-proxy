@@ -273,7 +273,7 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 	domain := clientHello.ServerName
 	err = domainValidName(domain)
 	if err != nil {
-		logrus.Warnf("Bad domain name '%v': %v", domain, err)
+		logrus.Infof("Bad domain name '%v': %v", domain, err)
 		return nil, errors.New("Bad domain name")
 	}
 	domain = strings.ToLower(domain)

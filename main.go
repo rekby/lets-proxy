@@ -66,6 +66,7 @@ var (
 	allowIPsString         = flag.String("allowed-ips", "auto", "allowable ip-addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, it logic can change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to http://ifconfig.io/ip - it need for public ip autodetection behinde nat.")
 	allowIPRefreshInterval = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often allow ip addresses will be refreshed. Allowable format https://golang.org/pkg/time/#ParseDuration")
 	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind nat.")
+	minTLSVersion                 = flag.String("min-tls", "", "Minimul supported tls version: ssl3,tls10,tls11,tls12. Default is golang's default.")
 )
 
 var (
@@ -402,7 +403,20 @@ func handleTcpConnection(in *net.TCPConn) {
 	// handle ssl
 	tlsConfig := tls.Config{
 		GetCertificate: certificateGet,
-		MinVersion:     tls.VersionSSL30,
+	}
+	switch strings.TrimSpace(*minTLSVersion) {
+	case "":
+		// pass
+	case "ssl3":
+		tlsConfig.MinVersion = tls.VersionSSL30
+	case "tls10":
+		tlsConfig.MinVersion = tls.VersionTLS10
+	case "tls11":
+		tlsConfig.MinVersion = tls.VersionTLS11
+	case "tls12":
+		tlsConfig.MinVersion = tls.VersionTLS12
+	default:
+		logrus.Errorf("Doesn't know tls version '%v'", *minTLSVersion)
 	}
 	tlsConn := tls.Server(in, &tlsConfig)
 	err = tlsConn.Handshake()

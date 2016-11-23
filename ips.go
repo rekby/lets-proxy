@@ -54,7 +54,8 @@ func getLocalIPs() (res ipSlice) {
 	if bindAddr.IP.IsUnspecified() || len(bindAddr.IP) == 0 {
 		addresses, err := net.InterfaceAddrs()
 		if err != nil {
-			logrus.Panic("Can't get local ip addresses:", err)
+			logrus.Error("Can't get local ip addresses:", err)
+			return nil
 		}
 		res = make([]net.IP, 0, len(addresses))
 		for _, addr := range addresses {
@@ -103,7 +104,7 @@ func getIpByExternalRequest()(res ipSlice){
 			return nil
 		}
 		ip := net.ParseIP(strings.TrimSpace(string(respBytes)))
-		logrus.Infof("Detected ip by http://ifconfig.io/ip (%v): %v", network, ip)
+		logrus.Debugf("Detected ip by http://ifconfig.io/ip (%v): %v", network, ip)
 		return ip
 	}
 
@@ -123,17 +124,6 @@ func getIpByExternalRequest()(res ipSlice){
 	return res
 }
 
-func parseNet(s string)net.IPNet {
-	_, ipnet, err := net.ParseCIDR(s)
-	if err != nil {
-		panic(err)
-	}
-	if ipnet == nil {
-		panic("ipnet == nil: " + s)
-	}
-	return *ipnet
-}
-
 func initAllowedIPs() {
 	var allowedIPs ipSlice
 
@@ -141,18 +131,18 @@ func initAllowedIPs() {
 		allowed = strings.TrimSpace(allowed)
 		switch {
 		case allowed == "local":
-			logrus.Info("Detect local ips")
+			logrus.Debug("Detect local ips")
 			needUpdateAllowedIpList = true
 			localIPs := getLocalIPs()
-			logrus.Info("Detect local ips:", localIPs)
+			logrus.Debug("Detect local ips:", localIPs)
 			allowedIPs = append(allowedIPs, localIPs...)
 		case allowed == "nat":
-			logrus.Info("Detect nated ips")
+			logrus.Debug("Detect nated ips")
 			needUpdateAllowedIpList =true
 			allowedIPs = append(allowedIPs, getIpByExternalRequest()...)
 		case allowed == "auto":
 			needUpdateAllowedIpList = true
-			logrus.Info("Autodetect ips")
+			logrus.Debug("Autodetect ips")
 			localIPs := getLocalIPs()
 			allowedIPs = append(allowedIPs, localIPs...)
 			hasPublicIPv4 := false
@@ -177,9 +167,9 @@ func initAllowedIPs() {
 			}
 			if !hasPublicIPv4 {
 				sort.Sort(localIPs)
-				logrus.Info("Can't find local public ipv4 address. Try detect ip by external request. Local addresses:", localIPs)
+				logrus.Debug("Can't find local public ipv4 address. Try detect ip by external request. Local addresses:", localIPs)
 				externalIPs := getIpByExternalRequest()
-				logrus.Info("IP addresses by external request:", externalIPs)
+				logrus.Debug("IP addresses by external request:", externalIPs)
 				allowedIPs = append(allowedIPs, externalIPs...)
 			}
 		case net.ParseIP(allowed) != nil:
@@ -247,3 +237,15 @@ func ipContains(slice ipSlice, ip net.IP) bool {
 	}
 	return ipCompare(ip, slice[index]) == 0
 }
+
+func parseNet(s string)net.IPNet {
+	_, ipnet, err := net.ParseCIDR(s)
+	if err != nil {
+		panic(err)
+	}
+	if ipnet == nil {
+		panic("ipnet == nil: " + s)
+	}
+	return *ipnet
+}
+

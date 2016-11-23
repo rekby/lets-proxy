@@ -13,6 +13,9 @@ export GOPATH=/gopath
 mkdir -p ${GOPATH}/src/github.com/rekby/lets-proxy
 cp -R ./ ${GOPATH}/src/github.com/rekby/lets-proxy/
 
+echo "Go test"
+go test -v github.com/rekby/lets-proxy || exit 1
+
 go build -o http-headers gitlab/http-headers.go
 ./http-headers &
 sleep 1

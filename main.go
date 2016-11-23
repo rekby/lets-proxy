@@ -63,6 +63,9 @@ var (
 	logrotateMaxBackups    = flag.Int("logrotate-count", 30, "How many old backups keep. 0 mean infinite")
 	logrotateMaxAge        = flag.Int("logrotate-age", 30, "How many days keep old backups")
 	noLogStderr            = flag.Bool("no-log-stderr", false, "supress log to stderr")
+	allowIPsString         = flag.String("allowed-ips", "auto", "allowable ip-addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, it logic can change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to https://ifconfig.io/ip - it need for public ip autodetection behinde nat.")
+	allowIPRefreshInterval = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often allow ip addresses will be refreshed. Allowable format https://golang.org/pkg/time/#ParseDuration")
+	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind nat.")
 )
 
 var (
@@ -372,36 +375,6 @@ checkCertInCache:
 	return cert, err
 }
 
-func getLocalIPs() (res []net.IP) {
-	bindAddr, _ := net.ResolveTCPAddr("tcp", *bindTo)
-	if bindAddr.IP.IsUnspecified() || len(bindAddr.IP) == 0 {
-		addresses, err := net.InterfaceAddrs()
-		if err != nil {
-			logrus.Panic("Can't get local ip addresses:", err)
-		}
-		res = make([]net.IP, 0, len(addresses))
-		for _, addr := range addresses {
-			logrus.Info("Local ip:", addr.String())
-			ip, _, err := net.ParseCIDR(addr.String())
-			if err == nil {
-				res = append(res, ip)
-			} else {
-				logrus.Errorf("Can't parse local ip '%v': %v", addr.String(), err)
-			}
-		}
-	} else {
-		res = []net.IP{bindAddr.IP}
-	}
-	if logrus.GetLevel() >= logrus.InfoLevel {
-		ipStrings := make([]string, len(res))
-		for i, addr := range res {
-			ipStrings[i] = addr.String()
-		}
-		logrus.Info("Local ip:", ipStrings)
-	}
-	return res
-}
-
 func getTargetAddr(in *net.TCPConn) (net.TCPAddr, error) {
 	var target net.TCPAddr
 	if paramTargetTcpAddr.IP == nil || paramTargetTcpAddr.IP.IsUnspecified() {
@@ -513,7 +486,7 @@ func prepare() {
 		additionalHeaders = append(additionalHeaders, buf.Bytes()...)
 	}
 
-	localIPs = getLocalIPs()
+	initAllowedIPs()
 	acmeService = &acmeStruct{}
 	if *certMemCount > 0 {
 		logrus.Infof("Create memory cache for '%v' certificates", *certMemCount)

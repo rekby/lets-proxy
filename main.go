@@ -63,8 +63,9 @@ var (
 	logrotateMaxBackups    = flag.Int("logrotate-count", 30, "How many old backups keep. 0 mean infinite")
 	logrotateMaxAge        = flag.Int("logrotate-age", 30, "How many days keep old backups")
 	noLogStderr            = flag.Bool("no-log-stderr", false, "supress log to stderr")
-	allowIPsString         = flag.String("allow-ips", "local", "allowable ip-addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'local' (all autodetected local IP), 'domain:<domain.com>' - allow all IP from A and AAA records for <domain.com>, the option allow for many times usage and 'nat' - detect IP by request to https://ifconfig.io/ip - it need for public ip autodetection behinde nat.")
+	allowIPsString         = flag.String("allowed-ips", "auto", "allowable ip-addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, it logic can change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to https://ifconfig.io/ip - it need for public ip autodetection behinde nat.")
 	allowIPRefreshInterval = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often allow ip addresses will be refreshed. Allowable format https://golang.org/pkg/time/#ParseDuration")
+	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind nat.")
 )
 
 var (

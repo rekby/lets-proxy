@@ -3,14 +3,14 @@ package main
 import (
 	"bytes"
 	"github.com/Sirupsen/logrus"
-	"net"
-	"sort"
-	"sync/atomic"
-	"strings"
-	"net/http"
 	"io/ioutil"
-	"time"
+	"net"
+	"net/http"
+	"sort"
+	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 type ipSlice []net.IP
@@ -33,7 +33,7 @@ var (
 	needUpdateAllowedIpList = false
 
 	globalAllowedIPs atomic.Value
-	localIPNetworks = []net.IPNet { // additional filter to ip.IsGlobalUnicast, issue https://github.com/golang/go/issues/11772
+	localIPNetworks  = []net.IPNet{ // additional filter to ip.IsGlobalUnicast, issue https://github.com/golang/go/issues/11772
 		parseNet("10.0.0.0/8"),
 		parseNet("172.16.0.0/12"),
 		parseNet("192.168.0.0/16"),
@@ -80,14 +80,13 @@ func getLocalIPs() (res ipSlice) {
 	return res
 }
 
-func getIpByExternalRequest()(res ipSlice){
+func getIpByExternalRequest() (res ipSlice) {
 	fGetIp := func(network string) net.IP {
-		client := http.Client{Transport:
-			&http.Transport{
-				Dial:func(_supress_network, addr string) (net.Conn, error){
-					return net.Dial(network, addr)
-				},
+		client := http.Client{Transport: &http.Transport{
+			Dial: func(_supress_network, addr string) (net.Conn, error) {
+				return net.Dial(network, addr)
 			},
+		},
 		}
 		client.Timeout = *getIPByExternalRequestTimeout
 		resp, err := client.Get("http://ifconfig.io/ip")
@@ -112,11 +111,11 @@ func getIpByExternalRequest()(res ipSlice){
 
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
-	go func(){
+	go func() {
 		res[0] = fGetIp("tcp4")
 		wg.Done()
 	}()
-	go func(){
+	go func() {
 		res[1] = fGetIp("tcp6")
 		wg.Done()
 	}()
@@ -127,7 +126,8 @@ func getIpByExternalRequest()(res ipSlice){
 func initAllowedIPs() {
 	var allowedIPs ipSlice
 
-	for _, allowed := range strings.Split(*allowIPsString,",") {
+forAllowed:
+	for _, allowed := range strings.Split(*allowIPsString, ",") {
 		allowed = strings.TrimSpace(allowed)
 		switch {
 		case allowed == "local":
@@ -138,34 +138,40 @@ func initAllowedIPs() {
 			allowedIPs = append(allowedIPs, localIPs...)
 		case allowed == "nat":
 			logrus.Debug("Detect nated ips")
-			needUpdateAllowedIpList =true
+			needUpdateAllowedIpList = true
 			allowedIPs = append(allowedIPs, getIpByExternalRequest()...)
 		case allowed == "auto":
-			needUpdateAllowedIpList = true
 			logrus.Debug("Autodetect ips")
-			localIPs := getLocalIPs()
-			allowedIPs = append(allowedIPs, localIPs...)
-			hasPublicIPv4 := false
-			forIP:
-			for _, ip := range localIPs {
-				if len(ip) == 0 {
-					continue
-				}
+			bindedTcpAddr, _ := net.ResolveTCPAddr("tcp", *bindTo)
+			var bindedIP net.IP
+			var localIPs ipSlice
 
-				if !ip.IsGlobalUnicast() {
-					continue
+			if bindedTcpAddr != nil && len(bindedTcpAddr.IP) > 0 && !bindedTcpAddr.IP.IsUnspecified() {
+				bindedIP = bindedTcpAddr.IP
+			}
+			if bindedIP == nil {
+				needUpdateAllowedIpList = true
+				logrus.Debug("No binded ip, autodetect all local ips.")
+				localIPs = getLocalIPs()
+				allowedIPs = append(allowedIPs, localIPs...)
+			} else {
+				logrus.Debug("Add binded IP:", bindedIP)
+				localIPs = ipSlice{bindedIP}
+				if isPublicIp(bindedTcpAddr.IP) {
+					logrus.Debug("Binded IP is public. Stop autodetection")
+					continue forAllowed
 				}
-				for _, net := range localIPNetworks {
-					if net.Contains(ip) {
-						continue forIP
-					}
-				}
-				if ip.To4() != nil {
+			}
+
+			hasPublicIPv4 := false
+			for _, ip := range localIPs {
+				if ip.To4() != nil && isPublicIp(ip) {
 					hasPublicIPv4 = true
 					break
 				}
 			}
-			if !hasPublicIPv4 {
+			if !hasPublicIPv4 && len(bindedIP) != net.IPv6len {
+				needUpdateAllowedIpList = true
 				sort.Sort(localIPs)
 				logrus.Debug("Can't find local public ipv4 address. Try detect ip by external request. Local addresses:", localIPs)
 				externalIPs := getIpByExternalRequest()
@@ -238,7 +244,21 @@ func ipContains(slice ipSlice, ip net.IP) bool {
 	return ipCompare(ip, slice[index]) == 0
 }
 
-func parseNet(s string)net.IPNet {
+func isPublicIp(ip net.IP) bool {
+	if len(ip) == 0 {
+		return false
+	}
+	if !ip.IsGlobalUnicast() {
+		return false
+	}
+	for _, net := range localIPNetworks {
+		if net.Contains(ip) {
+			return false
+		}
+	}
+	return true
+}
+func parseNet(s string) net.IPNet {
 	_, ipnet, err := net.ParseCIDR(s)
 	if err != nil {
 		panic(err)
@@ -248,4 +268,3 @@ func parseNet(s string)net.IPNet {
 	}
 	return *ipnet
 }
-

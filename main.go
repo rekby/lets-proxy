@@ -38,34 +38,35 @@ const (
 )
 
 var (
-	bindTo                 = flag.String("bind-to", ":443", "")
-	targetConnString       = flag.String("target", ":80", "IP, :port or IP:port. Default port is 80. Default IP - same which receive connection.")
-	targetConnTimeout      = flag.Duration("target-conn-timeout", time.Second, "")
-	acmeApiUrl             = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
-	acmeTestServer         = flag.Bool("test", false, "Use test lets encrypt server instead of <acme-server>")
-	certDir                = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
-	certMemCount           = flag.Int("in-memory-cnt", 100, "How many count of certs cache in memory for prevent parse it from file")
-	stateFilePath          = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
-	proxyMode              = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
-	httpRealIPHeader       = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
-	additionalHeadersParam = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Several headers separated by comma.")
-	logLevel               = flag.String("loglevel", "warning", "fatal|error|warning|info|debug")
-	logOutput              = flag.String("logout", "-", "Path to logout. Special: '-' (without quotes) - stderr")
-	versionPrint           = flag.Bool("version", false, "print version and exit.")
-	nonCertDomains         = flag.String("non-cert-domains", "", "No obtain certificate for mathed domains. Regexpes separated by comma.")
-	serviceAction          = flag.String("service-action", "", "start,stop,install,uninstall,reinstall")
-	serviceName            = flag.String("service-name", SERVICE_NAME_EXAMPLE, "service name, need for service actions")
-	workingDir             = flag.String(WORKING_DIR_ARG_NAME, "", "Set working dir")
-	parallelAcmeRequests   = flag.Int("acme-parallel", 10, "count of parallel requests for acme server")
-	timeToRenew            = flag.Duration("time-to-renew", time.Hour*24*30, "Time to end of certificate for background renew.")
-	logrotateTime          = flag.String("logrotate-time", "", "minutely|hourly|daily|weekly|monthly|yearly|\"\", empty or none mean no logrotate by time. Weekly - rotate log at midnight from sunday to monday")
-	logrotateSize          = flag.Int("logrotate-mb", 100, "logrotate by size in megabytes. 0 Mean no logrotate by size.")
-	logrotateMaxBackups    = flag.Int("logrotate-count", 30, "How many old backups keep. 0 mean infinite")
-	logrotateMaxAge        = flag.Int("logrotate-age", 30, "How many days keep old backups")
-	noLogStderr            = flag.Bool("no-log-stderr", false, "supress log to stderr")
-	allowIPsString         = flag.String("allowed-ips", "auto", "allowable ip-addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, it logic can change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to https://ifconfig.io/ip - it need for public ip autodetection behinde nat.")
-	allowIPRefreshInterval = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often allow ip addresses will be refreshed. Allowable format https://golang.org/pkg/time/#ParseDuration")
+	bindTo                        = flag.String("bind-to", ":443", "")
+	targetConnString              = flag.String("target", ":80", "IP, :port or IP:port. Default port is 80. Default IP - same which receive connection.")
+	targetConnTimeout             = flag.Duration("target-conn-timeout", time.Second, "")
+	acmeApiUrl                    = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
+	acmeTestServer                = flag.Bool("test", false, "Use test lets encrypt server instead of <acme-server>")
+	certDir                       = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
+	certMemCount                  = flag.Int("in-memory-cnt", 100, "How many count of certs cache in memory for prevent parse it from file")
+	stateFilePath                 = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
+	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
+	httpRealIPHeader              = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
+	additionalHeadersParam        = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Several headers separated by comma.")
+	logLevel                      = flag.String("loglevel", "warning", "fatal|error|warning|info|debug")
+	logOutput                     = flag.String("logout", "-", "Path to logout. Special: '-' (without quotes) - stderr")
+	versionPrint                  = flag.Bool("version", false, "print version and exit.")
+	nonCertDomains                = flag.String("non-cert-domains", "", "No obtain certificate for mathed domains. Regexpes separated by comma.")
+	serviceAction                 = flag.String("service-action", "", "start,stop,install,uninstall,reinstall")
+	serviceName                   = flag.String("service-name", SERVICE_NAME_EXAMPLE, "service name, need for service actions")
+	workingDir                    = flag.String(WORKING_DIR_ARG_NAME, "", "Set working dir")
+	parallelAcmeRequests          = flag.Int("acme-parallel", 10, "count of parallel requests for acme server")
+	timeToRenew                   = flag.Duration("time-to-renew", time.Hour*24*30, "Time to end of certificate for background renew.")
+	logrotateTime                 = flag.String("logrotate-time", "", "minutely|hourly|daily|weekly|monthly|yearly|\"\", empty or none mean no logrotate by time. Weekly - rotate log at midnight from sunday to monday")
+	logrotateSize                 = flag.Int("logrotate-mb", 100, "logrotate by size in megabytes. 0 Mean no logrotate by size.")
+	logrotateMaxBackups           = flag.Int("logrotate-count", 30, "How many old backups keep. 0 mean infinite")
+	logrotateMaxAge               = flag.Int("logrotate-age", 30, "How many days keep old backups")
+	noLogStderr                   = flag.Bool("no-log-stderr", false, "supress log to stderr")
+	allowIPsString                = flag.String("allowed-ips", "auto", "allowable ip-addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, it logic can change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to https://ifconfig.io/ip - it need for public ip autodetection behinde nat.")
+	allowIPRefreshInterval        = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often allow ip addresses will be refreshed. Allowable format https://golang.org/pkg/time/#ParseDuration")
 	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind nat.")
+	minTLSVersion                 = flag.String("min-tls", "", "Minimul supported tls version: ssl3,tls10,tls11,tls12. Default is golang's default.")
 )
 
 var (
@@ -402,7 +403,20 @@ func handleTcpConnection(in *net.TCPConn) {
 	// handle ssl
 	tlsConfig := tls.Config{
 		GetCertificate: certificateGet,
-		MinVersion:     tls.VersionSSL30,
+	}
+	switch strings.TrimSpace(*minTLSVersion) {
+	case "":
+		// pass
+	case "ssl3":
+		tlsConfig.MinVersion = tls.VersionSSL30
+	case "tls10":
+		tlsConfig.MinVersion = tls.VersionTLS10
+	case "tls11":
+		tlsConfig.MinVersion = tls.VersionTLS11
+	case "tls12":
+		tlsConfig.MinVersion = tls.VersionTLS12
+	default:
+		logrus.Errorf("Doesn't know tls version '%v'", *minTLSVersion)
 	}
 	tlsConn := tls.Server(in, &tlsConfig)
 	err = tlsConn.Handshake()

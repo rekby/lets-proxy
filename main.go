@@ -70,6 +70,7 @@ var (
 	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind nat.")
 	minTLSVersion                 = flag.String("min-tls", "", "Minimul supported tls version: ssl3,tls10,tls11,tls12. Default is golang's default.")
 	connectionIDHeader            = flag.String("connection-id-header", "", "Header name for send connection id to backend in http proxy mode. Default it isn't send.")
+	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain doesn't available (have zero length). For example client doesn't support SNI. It used for obtain and use certificate only. It isn't forse set header HOST in request.")
 )
 
 var (
@@ -300,6 +301,9 @@ func acceptConnections(listener *net.TCPListener) {
 
 func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, err error) {
 	domain := clientHello.ServerName
+	if domain == "" {
+		domain = *defaultDomain
+	}
 	err = domainValidName(domain)
 	if err != nil {
 		logrus.Infof("Bad domain name '%v': %v", domain, err)

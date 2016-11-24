@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -89,6 +90,12 @@ type stateStruct struct {
 }
 
 type nullWriter struct{}
+
+type ConnectionID string
+
+func (cid ConnectionID) String() string {
+	return string(cid)
+}
 
 func (nullWriter) Write(buf []byte) (int, error) {
 	return len(buf), nil
@@ -261,7 +268,10 @@ func main() {
 }
 
 func acceptConnections(listener *net.TCPListener) {
+	started := time.Now().Unix()
+	connectionNum := 0
 	for {
+		connectionNum++
 		tcpConn, err := listener.AcceptTCP()
 		if err != nil || tcpConn == nil {
 			logrus.Warn("Can't accept tcp connection: ", err)
@@ -270,18 +280,20 @@ func acceptConnections(listener *net.TCPListener) {
 			}
 			continue
 		}
-		go func() {
+		go func(cn int) {
+			cid := ConnectionID(strconv.FormatInt(started, 10) + "-" + strconv.Itoa(cn))
+
 			defer func() {
 				recoveredErr := recover()
 				if recoveredErr != nil {
-					logrus.Errorf("PANIC error, handled by recover: %v. Version '%v'. Stacktrace: %s",
-						recoveredErr, VERSION, debug.Stack(),
+					logrus.Errorf("PANIC error, handled by recover cid '%v': %v. Version '%v'. Stacktrace: %s",
+						cid, recoveredErr, VERSION, debug.Stack(),
 					)
 				}
 			}()
 
-			handleTcpConnection(tcpConn)
-		}()
+			handleTcpConnection(cid, tcpConn)
+		}(connectionNum)
 	}
 }
 
@@ -409,10 +421,12 @@ func getTargetAddr(in *net.TCPConn) (net.TCPAddr, error) {
 	return target, nil
 }
 
-func handleTcpConnection(in *net.TCPConn) {
+func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
+	logrus.Debugf("Receive incoming connection from %v, cid: '%v'", in.RemoteAddr(), cid)
+
 	target, err := getTargetAddr(in)
 	if err != nil {
-		logrus.Errorf("Can't get target IP/port for '%v': %v", in.RemoteAddr(), err)
+		logrus.Errorf("Can't get target IP/port for '%v' (cid '%v'): %v", in.RemoteAddr(), cid, err)
 		return
 	}
 
@@ -432,18 +446,18 @@ func handleTcpConnection(in *net.TCPConn) {
 	case "tls12":
 		tlsConfig.MinVersion = tls.VersionTLS12
 	default:
-		logrus.Errorf("Doesn't know tls version '%v'", *minTLSVersion)
+		logrus.Errorf("Doesn't know tls version '%v', use default. cid '%v'", *minTLSVersion, cid)
 	}
 	tlsConn := tls.Server(in, &tlsConfig)
 	err = tlsConn.Handshake()
-	logrus.Debug("tls ciper:", tlsConn.ConnectionState().CipherSuite)
+	logrus.Debugf("tls ciper, cid %v: %v", cid, tlsConn.ConnectionState().CipherSuite)
 	if err == nil {
-		logrus.Debug("Handshake for incoming:", tlsConn.RemoteAddr())
+		logrus.Debugf("Handshake for incoming cid '%v': %v", cid, tlsConn.RemoteAddr())
 	} else {
-		logrus.Infof("Error in tls handshake from '%v':%v", tlsConn.RemoteAddr(), err)
+		logrus.Infof("Error in tls handshake from '%v' cid '%v' :%v", tlsConn.RemoteAddr(), cid, err)
 	}
 
-	startProxy(target, tlsConn)
+	startProxy(cid, target, tlsConn)
 }
 
 func prepare() {

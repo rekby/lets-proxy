@@ -87,7 +87,7 @@ func (this *acmeStruct) CreateCertificate(domain string) (cert *tls.Certificate,
 		if ctx.Err() == nil {
 			cancelFunc() // cancel all background processes. In real life - nothing.
 		} else {
-			logrus.Infof("Can't create certificate by context for domain '%v': %v", ctx.Err())
+			logrus.Infof("Can't create certificate by context for domain '%v': %v", domain, ctx.Err())
 		}
 	}()
 

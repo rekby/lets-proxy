@@ -159,6 +159,8 @@ func main() {
 		logrus.SetOutput(io.MultiWriter(logouts...))
 	}
 
+	logrus.Info("Version: ", VERSION)
+
 	prepare()
 
 	var serviceArguments []string

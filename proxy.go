@@ -87,21 +87,22 @@ readHeaderLines:
 			break readHeaderLines
 		}
 
-		headerName := bytes.ToUpper(headerStart[:len(headerStart)-1]) // Cut trailing colon from start
+		headerName := headerStart[:len(headerStart)-1]
+		headerNameUpperCase := bytes.ToUpper(headerName) // Cut trailing colon from start
 
 		skipHeader := false
 		for _, ownHeader := range cutHeaders {
-			if bytes.Equal(ownHeader, headerName) {
+			if bytes.Equal(ownHeader, headerNameUpperCase) {
 				skipHeader = true
 				break
 			}
 			ownHeaderS := string(ownHeader)
-			headerNameS := string(headerName)
+			headerNameS := string(headerNameUpperCase)
 			skipHeader = ownHeaderS == headerNameS
 		}
 
 		if skipHeader {
-			logrus.Debugf("Skip header: '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName)
+			logrus.Debugf("Skip header: '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerNameUpperCase)
 			buf[0] = headerStart[len(headerStart)-1]
 
 			for buf[0] != '\n' {
@@ -127,7 +128,7 @@ readHeaderLines:
 			return
 		}
 
-		needHeaderContent := bytes.Equal(headerName, HEAD_CONTENT_LENGTH) || bytes.Equal(headerName, HEAD_CONNECTION)
+		needHeaderContent := bytes.Equal(headerNameUpperCase, HEAD_CONTENT_LENGTH) || bytes.Equal(headerNameUpperCase, HEAD_CONNECTION)
 		headerContent := bytes.NewBuffer(buf[1:])
 		headerContent.Reset()
 
@@ -158,10 +159,10 @@ readHeaderLines:
 		}
 		if needHeaderContent {
 			switch {
-			case bytes.Equal(headerName, HEAD_CONNECTION):
+			case bytes.Equal(headerNameUpperCase, HEAD_CONNECTION):
 				keepalive = bytes.EqualFold(HEAD_CONNECTION_KEEP_ALIVE, bytes.TrimSpace(headerContent.Bytes()))
 
-			case bytes.Equal(headerName, HEAD_CONTENT_LENGTH):
+			case bytes.Equal(headerNameUpperCase, HEAD_CONTENT_LENGTH):
 				contentLength, err = strconv.ParseInt(string(bytes.TrimSpace(headerContent.Bytes())), 10, 64)
 				if err == nil {
 					logrus.Debugf("Header content-length parsed from '%v' to '%v' cid '%v': %v", sourceConn.RemoteAddr(),
@@ -174,7 +175,7 @@ readHeaderLines:
 
 			default:
 				logrus.Debugf("ERROR. Unknow why i need header content. Code error. From '%v' to '%v' cid '%v', header name '%s'",
-					sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName,
+					sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerNameUpperCase,
 				)
 			}
 		}

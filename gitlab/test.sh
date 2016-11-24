@@ -91,6 +91,7 @@ test_or_exit "test-remote" "test-remote: ${MY_IPv6}"
 test_or_exit "https" "https: on"
 test_or_exit "protohttps" "protohttps: on"
 test_or_exit "X-Forwarded-Proto" "X-Forwarded-Proto: https"
+test_or_exit "Connection-ID" "Connection-ID: "
 
 echo -n "Test cache file exists: "
 if grep -q CERTIFICATE certificates/${TMP_DOMAIN}.crt && grep -q PRIVATE certificates/${TMP_DOMAIN}.key; then

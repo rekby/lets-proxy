@@ -1,6 +1,7 @@
 Русскоязычное описание ниже (Russian below).
 
-English description:
+English description
+===================
 Reverse-proxy server to handle https-requests. Requires existing http-server at the same server. By default `lets-proxy` handles
 https requests to port 443 and proxies them as http to port 80 with same IP. It adds http header: X-Real-IP with ip address
 of remote client and X-Forwarded-Proto=https - for https detection.
@@ -26,6 +27,8 @@ Use --help key for details:
 
 
 Русский (Russian):
+==================
+
 Реверс-прокси сервер для обработки https-запросов. Для начала использования достаточно просто запустить его на сервере с 
 запущенным http-сервером. При этом lets-proxy начнёт слушать порт 433 и передавать запросы на порт 80 с тем же IP-адресом.
 К запросу будут добавляться заголовки X-Real-IP с IP-адресом источника запроса и X-Forwarded-Proto=https - для определения
@@ -52,3 +55,14 @@ Use --help key for details:
 Для получения подробной справки воспользуйтесь --help:
 
     ./lets-proxy --help or lets-proxy.exe --help
+
+
+Used libraries (alphabet ordered):
+==================================
+
+* http://github.com/hashicorp/golang-lru - memory cache
+* http://github.com/hlandau/acme/acmeapi - used for work with lets encrypt
+* http://github.com/kardianos/service - working as service, especially for windows.
+* http://github.com/miekg/dns - direct dns requests
+* http://github.com/Sirupsen/logrus - logging
+* http://gopkg.in/natefinch/lumberjack.v2 - log rotate

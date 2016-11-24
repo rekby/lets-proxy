@@ -59,7 +59,7 @@ go build -o proxy github.com/rekby/lets-proxy
 
 echo "Start proxy interactive - for view full log"
 
-./proxy --test --logout=log.txt --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https &
+./proxy --test --logout=log.txt --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https --connection-id-header=Connection-ID &
 #./proxy &  ## REAL CERT. WARNING - LIMITED CERT REQUEST
 
 sleep 10 # Allow to start, generate keys, etc.
@@ -91,6 +91,7 @@ test_or_exit "test-remote" "test-remote: ${MY_IPv6}"
 test_or_exit "https" "https: on"
 test_or_exit "protohttps" "protohttps: on"
 test_or_exit "X-Forwarded-Proto" "X-Forwarded-Proto: https"
+test_or_exit "Connection-ID" "Connection-ID: "
 
 echo -n "Test cache file exists: "
 if grep -q CERTIFICATE certificates/${TMP_DOMAIN}.crt && grep -q PRIVATE certificates/${TMP_DOMAIN}.key; then

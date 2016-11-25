@@ -462,6 +462,8 @@ func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
 		logrus.Debugf("Handshake for incoming cid '%v': %v", cid, tlsConn.RemoteAddr())
 	} else {
 		logrus.Infof("Error in tls handshake from '%v' cid '%v' :%v", tlsConn.RemoteAddr(), cid, err)
+		tlsConn.Close()
+		return
 	}
 
 	startProxy(cid, target, tlsConn)

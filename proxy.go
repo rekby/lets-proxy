@@ -223,6 +223,9 @@ func startProxy(cid ConnectionID, targetAddr net.TCPAddr, in net.Conn) {
 	}
 
 	targetConn, ok := targetConnCommon.(*net.TCPConn)
+	targetConn.SetKeepAlive(true)
+	targetConn.SetKeepAlivePeriod(*tcpKeepAliveInterval)
+
 	if !ok {
 		logrus.Errorf("Can't cast connection to tcp connection, target '%v' cid '%v'", targetAddr.String(), cid)
 		return

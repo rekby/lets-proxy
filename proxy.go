@@ -239,7 +239,7 @@ func startProxy(cid ConnectionID, targetAddr net.TCPAddr, in net.Conn) {
 }
 
 func startProxyHTTP(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn) {
-	logrus.Infof("Start http-proxy connection from '%v' to '%v' cid '%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid)
+	logrus.Debugf("Start http-proxy connection from '%v' to '%v' cid '%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid)
 
 	// answer from server proxy without changes
 	go func() {

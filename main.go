@@ -71,6 +71,7 @@ var (
 	minTLSVersion                 = flag.String("min-tls", "", "Minimul supported tls version: ssl3,tls10,tls11,tls12. Default is golang's default.")
 	connectionIDHeader            = flag.String("connection-id-header", "", "Header name for send connection id to backend in http proxy mode. Default it isn't send.")
 	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain doesn't available (have zero length). For example client doesn't support SNI. It used for obtain and use certificate only. It isn't forse set header HOST in request.")
+	tcpKeepAliveInterval = flag.Duration("tcp-keepalive-interval", time.Minute, "Interval between send tcp keepalive packages detect dead connections")
 )
 
 var (
@@ -430,6 +431,9 @@ func getTargetAddr(in *net.TCPConn) (net.TCPAddr, error) {
 
 func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
 	logrus.Debugf("Receive incoming connection from %v, cid: '%v'", in.RemoteAddr(), cid)
+
+	in.SetKeepAlive(true)
+	in.SetKeepAlivePeriod(*tcpKeepAliveInterval)
 
 	target, err := getTargetAddr(in)
 	if err != nil {

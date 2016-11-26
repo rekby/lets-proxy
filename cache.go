@@ -5,15 +5,19 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/golang-lru"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 var (
-	certMemCache *lru.Cache
+	certMemCache      *lru.Cache
+	DEFAULT_FILE_MODE os.FileMode = 0666
 )
 
 // Must return valid certificate with non nil cert.Leaf or return nil
@@ -87,6 +91,7 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 
 	keyPath := filepath.Join(*certDir, domain+".key")
 	certPath := filepath.Join(*certDir, domain+".crt")
+	jsonPath := filepath.Join(*certDir, domain+".json")
 
 	keyFile, err := os.Create(keyPath)
 	if keyFile != nil {
@@ -138,4 +143,28 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 	}
 
 	logrus.Infof("Save certificate for domain '%v' to files: %v, %v", domain, keyPath, certPath)
+
+	if *certJsonInfo {
+		if cert.Leaf != nil {
+			info := struct {
+				Domains    []string
+				ExpireDate time.Time
+			}{}
+			info.Domains = cert.Leaf.DNSNames
+			info.ExpireDate = cert.Leaf.NotAfter.UTC()
+			jsInfoBytes, err := json.Marshal(info)
+			if err == nil {
+				err = ioutil.WriteFile(jsonPath, jsInfoBytes, DEFAULT_FILE_MODE)
+				if err == nil {
+					logrus.Debug("Save cert metadata to: ", jsonPath)
+				} else {
+					logrus.Errorf("Can't write file '%v': %v", jsonPath, err)
+				}
+			} else {
+				logrus.Errorf("Can't marshal json cert info (%v): %v", cert.Leaf.DNSNames, err)
+			}
+		} else {
+			logrus.Error("Certificate leaf is nil while save in cache")
+		}
+	}
 }

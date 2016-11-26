@@ -72,6 +72,7 @@ var (
 	connectionIDHeader            = flag.String("connection-id-header", "", "Header name for send connection id to backend in http proxy mode. Default it isn't send.")
 	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain doesn't available (have zero length). For example client doesn't support SNI. It used for obtain and use certificate only. It isn't forse set header HOST in request.")
 	tcpKeepAliveInterval          = flag.Duration("tcp-keepalive-interval", time.Minute, "Interval between send tcp keepalive packages detect dead connections")
+	certJsonInfo                  = flag.Bool("cert-json", false, "Save json info about certificate near the certificate file with same name with .json extension")
 )
 
 var (

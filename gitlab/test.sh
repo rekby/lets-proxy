@@ -129,10 +129,10 @@ echo "Test obtain only one cert for every domain same time and test www-optimiza
 echo > log.txt
 
 for i in `seq 1 10`; do
-    A=`curl https://${TMP_DOMAIN2} >/dev/null 2>&1 &`
-    A=`curl https://${TMP_WWWDOMAIN2} >/dev/null 2>&1 &`
+    A=`curl -k https://${TMP_DOMAIN2} >/dev/null 2>&1 &`
+    A=`curl -k https://${TMP_WWWDOMAIN2} >/dev/null 2>&1 &`
 done
-curl https://${TMP_DOMAIN2} >/dev/null 2>&1 # Wait answer
+curl -k https://${TMP_DOMAIN2} >/dev/null 2>&1 # Wait answer
 
 CERTS_OBTAINED=`cat log.txt | grep "BEGIN CERTIFICATE" | wc -l`
 if [ "${CERTS_OBTAINED}" != "1" ]; then
@@ -141,5 +141,15 @@ if [ "${CERTS_OBTAINED}" != "1" ]; then
     exit 1
 fi
 echo "Obtain only one cert for a domain same time - OK"
+
+echo "Test www-optimiation"
+TEST=`curl -k https://${TMP_WWWDOMAIN2} 2>/dev/null` # Domain work
+test_or_exit "HOST" "HOST: ${TMP_WWWDOMAIN2}"
+
+# Have metadata
+if ! ( grep -q ${TMP_WWWDOMAIN2} certificates/${TMP_DOMAIN2}.json && grep -q ${TMP_WWWDOMAIN2} certificates/${TMP_DOMAIN2}.json ); then
+    delete_domain
+    exit 1
+fi
 
 delete_domain

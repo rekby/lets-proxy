@@ -24,7 +24,6 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -75,6 +74,7 @@ var (
 	tcpKeepAliveInterval          = flag.Duration("tcp-keepalive-interval", time.Minute, "Interval between send tcp keepalive packages detect dead connections")
 	certJsonInfo                  = flag.Bool("cert-json", false, "Save json info about certificate near the certificate file with same name with .json extension")
 	disableWWWOptimization        = flag.Bool("disable-www-optimization", false, "Disable one cert for domain.com and www.domain.com (instead of separate certificates)")
+	blockBadDomainDuration        = flag.Duration("block-bad-domain-duration", time.Hour, "Disable try obtain certtificate for domain after error")
 )
 
 var (
@@ -84,15 +84,11 @@ var (
 	acmeService           *acmeStruct
 	nonCertDomainsRegexps []*regexp.Regexp
 	paramTargetTcpAddr    *net.TCPAddr
-
-	certDomainsObtaining      = make(map[string]bool)
-	certDomainsObtainingMutex = &sync.Mutex{}
 )
 
 // constants in var
 var (
-	VERSION                 = "unversioned" // need be var becouse it redefine by --ldflags "-X main.VERSION" during autobuild
-	errCertiObtainInProcess = errors.New("Certificate obtaining in process")
+	VERSION = "unversioned" // need be var becouse it redefine by --ldflags "-X main.VERSION" during autobuild
 )
 
 type stateStruct struct {
@@ -325,6 +321,12 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 	}
 
 	domain = strings.ToLower(domain)
+
+	if tmpBlockDomainGetBlocked([]string{domain}) != nil {
+		logrus.Info("Temporary blocked domain: '%v'", domain)
+		return nil, errors.New("Domain temporary blocked")
+	}
+
 	var baseDomain string
 	var domainsToObtain []string
 	switch {
@@ -386,14 +388,14 @@ checkCertInCache:
 
 		if obtainDomainsLock(domainsToObtain) {
 			break checkCertInCache // create cert
-		}else {
+		} else {
 			// wait, then cert in cache again
 			logrus.Infof("Obtain certificate in process for domain '%v', wait a second and check it again", domain)
 			time.Sleep(time.Second)
 			continue checkCertInCache
 		}
 	}
-	defer  obtainDomainsUnlock(domainsToObtain)
+	defer obtainDomainsUnlock(domainsToObtain)
 
 	// check if get cert between check cache and lock to obtain
 	cert = certificateCacheGet(baseDomain)
@@ -424,7 +426,19 @@ forRegexpCheckDomain:
 	cert, err = acmeService.CreateCertificate(ctx, allowedByRegexp, domain)
 	if err == nil {
 		certificateCachePut(domainsToObtain[0], cert)
+
+		domainsForBlock := []string{}
+		for _, checkDomain := range allowedByRegexp {
+			if !containString(cert.Leaf.DNSNames, checkDomain) {
+				domainsForBlock = append(domainsForBlock, checkDomain)
+			}
+		}
+		if len(domainsForBlock) > 0 {
+			tmpBlockDomainsAdd(domainsForBlock)
+		}
 	} else {
+		logrus.Infof("Can't obtain certificate for domains '%v': %v", allowedByRegexp, err)
+		tmpBlockDomainsAdd([]string{domain})
 		return nil, errors.New("Can't obtain acme certificate")
 	}
 
@@ -495,48 +509,6 @@ func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
 	}
 	logrus.Infof("Start proxy from '%v' to '%v' cid '%v' domain '%v'", in.RemoteAddr(), target, cid, serverName)
 	startProxy(cid, target, tlsConn)
-}
-
-/*
-Check for all of domains doesn't in obtaining process. If ok - lock all domains and return true.
-If any of domains already in obtaining process - return false and lock nothing.
-*/
-func obtainDomainsLock(domains []string) bool {
-	certDomainsObtainingMutex.Lock()
-	defer certDomainsObtainingMutex.Unlock()
-
-	alreadyObtaining := false
-	for _, domain := range domains {
-		alreadyObtaining = certDomainsObtaining[domain]
-		if alreadyObtaining {
-			return false
-		}
-	}
-
-	for _, domain := range domains {
-		certDomainsObtaining[domain] = true
-	}
-	return true
-}
-
-/*
-Unlock all domains from obtaining lock without any check
- */
-func obtainDomainsUnlock(domains []string) {
-	certDomainsObtainingMutex.Lock()
-	defer certDomainsObtainingMutex.Unlock()
-
-	if logrus.GetLevel() >= logrus.DebugLevel {
-		for _, domain := range domains {
-			if !certDomainsObtaining[domain] {
-				logrus.Debugf("Release from obtain cert not locked domain: %v", domain)
-			}
-		}
-	}
-
-	for _, domain := range domains {
-		delete(certDomainsObtaining, domain)
-	}
 }
 
 func prepare() {
@@ -676,6 +648,8 @@ func prepare() {
 	acmeService.privateKey = state.PrivateKey
 
 	acmeService.Init()
+
+	tmpBlockDomainCleanerStart()
 }
 
 func saveState(state stateStruct) {

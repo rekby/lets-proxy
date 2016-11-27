@@ -147,6 +147,7 @@ TEST=`curl -k https://${TMP_WWWDOMAIN2} 2>/dev/null` # Domain work
 test_or_exit "HOST" "HOST: ${TMP_WWWDOMAIN2}"
 
 # Have metadata
+cat certificates/${TMP_DOMAIN2}.json
 if ! ( grep -q ${TMP_WWWDOMAIN2} certificates/${TMP_DOMAIN2}.json && grep -q ${TMP_WWWDOMAIN2} certificates/${TMP_DOMAIN2}.json ); then
     delete_domain
     exit 1

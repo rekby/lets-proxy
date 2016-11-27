@@ -29,9 +29,11 @@ DOMAIN="gitlab-test.1gb.ru"
 
 TMP_SUBDOMAIN="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM.ya"
 TMP_SUBDOMAIN2="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM-2.ya"
+TMP_WWWSUBDOMAIN2="www.{$TMP_SUBDOMAIN2}"
 
 TMP_DOMAIN="$TMP_SUBDOMAIN.$DOMAIN"
 TMP_DOMAIN2="$TMP_SUBDOMAIN2.$DOMAIN"
+TMP_WWWDOMAIN2="$TMP_WWWSUBDOMAIN2.$DOMAIN"
 
 echo "Tmp domain: $TMP_DOMAIN"
 
@@ -42,6 +44,7 @@ MY_IPv6=`curl -s6 http://ifconfig.io/ip 2>/dev/null`
 echo MY IPv6: ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN} AAAA ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN2} AAAA ${MY_IPv6}
+./ypdd --sync ${DOMAIN} add ${TMP_WWWSUBDOMAIN2} AAAA ${MY_IPv6}
 
 function delete_domain(){
     echo "Delete record"
@@ -51,6 +54,11 @@ function delete_domain(){
 
     echo "Delete record-2"
     ID=`./ypdd ${DOMAIN} list | grep ${TMP_SUBDOMAIN2} | cut -d ' ' -f 1`
+    echo "ID: $ID"
+    ./ypdd $DOMAIN del $ID
+
+    echo "Delete record-2-www"
+    ID=`./ypdd ${DOMAIN} list | grep ${TMP_WWWSUBDOMAIN2} | cut -d ' ' -f 1`
     echo "ID: $ID"
     ./ypdd $DOMAIN del $ID
 }
@@ -117,11 +125,12 @@ find /etc -name '*lets-proxy*'
 ./proxy --test --service-name=lets-proxy --service-action=uninstall
 
 
-echo "Test obtain only one cert for every domain same time"
+echo "Test obtain only one cert for every domain same time and test www-optimization"
 echo > log.txt
 
 for i in `seq 1 10`; do
     A=`curl https://${TMP_DOMAIN2} >/dev/null 2>&1 &`
+    A=`curl https://${TMP_WWWDOMAIN2} >/dev/null 2>&1 &`
 done
 curl https://${TMP_DOMAIN2} >/dev/null 2>&1 # Wait answer
 

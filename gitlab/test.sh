@@ -30,10 +30,12 @@ DOMAIN="gitlab-test.1gb.ru"
 TMP_SUBDOMAIN="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM.ya"
 TMP_SUBDOMAIN2="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM-2.ya"
 TMP_WWWSUBDOMAIN2="www.${TMP_SUBDOMAIN2}"
+TMP_SUBDOMAIN3WWWONLY="www.tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM-2.ya"
 
 TMP_DOMAIN="$TMP_SUBDOMAIN.$DOMAIN"
 TMP_DOMAIN2="$TMP_SUBDOMAIN2.$DOMAIN"
 TMP_WWWDOMAIN2="$TMP_WWWSUBDOMAIN2.$DOMAIN"
+TMP_DOMAIN3WWWONLY="$TMP_SUBDOMAIN3WWWONLY.$DOMAIN"
 
 echo "Tmp domain: $TMP_DOMAIN"
 
@@ -59,6 +61,11 @@ function delete_domain(){
 
     echo "Delete record-2-www"
     ID=`./ypdd ${DOMAIN} list | grep ${TMP_WWWSUBDOMAIN2} | cut -d ' ' -f 1`
+    echo "ID: $ID"
+    ./ypdd $DOMAIN del $ID
+
+    echo "Delete record-3-www-only"
+    ID=`./ypdd ${DOMAIN} list | grep ${TMP_SUBDOMAIN3WWWONLY} | cut -d ' ' -f 1`
     echo "ID: $ID"
     ./ypdd $DOMAIN del $ID
 }
@@ -149,6 +156,20 @@ test_or_exit "HOST" "HOST: ${TMP_WWWDOMAIN2}"
 # Have metadata
 cat certificates/${TMP_DOMAIN2}.json
 if ! ( grep -q ${TMP_WWWDOMAIN2} certificates/${TMP_DOMAIN2}.json && grep -q ${TMP_WWWDOMAIN2} certificates/${TMP_DOMAIN2}.json ); then
+    delete_domain
+    exit 1
+fi
+
+echo
+echo "Check www-only domain"
+TEST=`curk -sk https://${TMP_DOMAIN3WWWONLY}`
+test_or_exit "HOST" "HOST: ${TMP_DOMAIN3WWWONLY}"
+if ! [ -e certificates/${TMP_DOMAIN3WWWONLY}.cert ] || ! grep -q ${TMP_DOMAIN3WWWONLY} certificates/${TMP_DOMAIN3WWWONLY}.json; then
+    echo
+    cat certificates/${TMP_DOMAIN3WWWONLY}.cert
+    echo
+    cat certificates/${TMP_DOMAIN3WWWONLY}.json
+
     delete_domain
     exit 1
 fi

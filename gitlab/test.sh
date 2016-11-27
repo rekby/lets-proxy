@@ -28,9 +28,9 @@ echo
 DOMAIN="gitlab-test.1gb.ru"
 
 TMP_SUBDOMAIN="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM.ya"
-TMP_SUBDOMAIN2="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM-2.ya"
+TMP_SUBDOMAIN2="tmp-`date +%Y-%m-%d--%H-%M-%S`-2-$RANDOM$RANDOM-2.ya"
 TMP_WWWSUBDOMAIN2="www.${TMP_SUBDOMAIN2}"
-TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM-2.ya"
+TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW="tmp-`date +%Y-%m-%d--%H-%M-%S`-3-$RANDOM$RANDOM-2.ya"
 TMP_SUBDOMAIN3WWWONLY="www.${TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW}"
 
 TMP_DOMAIN="$TMP_SUBDOMAIN.$DOMAIN"
@@ -149,6 +149,7 @@ if [ "${CERTS_OBTAINED}" != "1" ]; then
     exit 1
 fi
 echo "Obtain only one cert for a domain same time - OK"
+sleep 3 # For more readable logs
 
 echo "Test www-optimiation"
 TEST=`curl -k https://${TMP_WWWDOMAIN2} 2>/dev/null` # Domain work

@@ -320,7 +320,7 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 
 	if strings.HasSuffix(domain, ACME_DOMAIN_SUFFIX) {
 		// force generate new certificate, without caching.
-		return acmeService.CreateCertificate(domain)
+		return acmeService.CreateCertificate([]string{domain})
 	}
 
 	now := time.Now()
@@ -353,7 +353,7 @@ checkCertInCache:
 						return
 					}
 
-					newCert, err := acmeService.CreateCertificate(domain)
+					newCert, err := acmeService.CreateCertificate([]string{domain})
 					if err == nil {
 						certificateCachePut(domain, newCert)
 					}
@@ -403,7 +403,7 @@ checkCertInCache:
 		}
 	}
 
-	cert, err = acmeService.CreateCertificate(domain)
+	cert, err = acmeService.CreateCertificate([]string{domain})
 	if err == nil {
 		certificateCachePut(domain, cert)
 	} else {

@@ -405,7 +405,7 @@ checkCertInCache:
 		return cert, nil
 	}
 
-	allowedByRegexp := make([]string, len(domainsToObtain))
+	allowedByRegexp := make([]string, 0, len(domainsToObtain))
 forRegexpCheckDomain:
 	for _, checkDomain := range domainsToObtain {
 		for _, re := range nonCertDomainsRegexps {
@@ -416,7 +416,7 @@ forRegexpCheckDomain:
 		}
 		allowedByRegexp = append(allowedByRegexp, checkDomain)
 	}
-	logrus.Debug("Allowed domains by regexp for '%v': '%v'", domainsToObtain, allowedByRegexp)
+	logrus.Debugf("Allowed domains by regexp for '%v': '%v'", domainsToObtain, allowedByRegexp)
 	if !containString(allowedByRegexp, domain) {
 		return nil, errors.New("Reject domain by regexp")
 	}

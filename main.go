@@ -323,7 +323,7 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 	domain = strings.ToLower(domain)
 
 	if tmpBlockDomainGetBlocked([]string{domain}) != nil {
-		logrus.Info("Temporary blocked domain: '%v'", domain)
+		logrus.Infof("Temporary blocked domain: '%v'", domain)
 		return nil, errors.New("Domain temporary blocked")
 	}
 

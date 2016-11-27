@@ -26,7 +26,7 @@ echo
 echo
 
 DOMAIN="gitlab-test.1gb.ru"
-RND="RANDOM$RANDOM"
+RND="${RANDOM}${RANDOM}"
 TMP_SUBDOMAIN="tmp-`date +%Y-%m-%d--%H-%M-%S`--${RND}--1.ya"
 TMP_SUBDOMAIN2="tmp-`date +%Y-%m-%d--%H-%M-%S`--${RND}--2.ya"
 TMP_WWWSUBDOMAIN2="www.${TMP_SUBDOMAIN2}"

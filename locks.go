@@ -1,18 +1,17 @@
 package main
 
 import (
-	"time"
-	"sync"
 	"github.com/Sirupsen/logrus"
+	"sync"
+	"time"
 )
 
 var (
 	certDomainsObtaining      = make(map[string]bool)
 	certDomainsObtainingMutex = &sync.Mutex{}
 
-	tmpBlockedDomain      = make(map[string]time.Time)
-	tmpBlockedDomainMutex = &sync.Mutex{}
-
+	badDomainMap      = make(map[string]time.Time)
+	badDomainMapMutex = &sync.Mutex{}
 )
 
 /*
@@ -57,49 +56,48 @@ func obtainDomainsUnlock(domains []string) {
 	}
 }
 
-
-func tmpBlockDomainsAdd(domains []string){
-	tmpBlockedDomainMutex.Lock()
-	defer tmpBlockedDomainMutex.Unlock()
+func badDomainsAdd(domains []string) {
+	badDomainMapMutex.Lock()
+	defer badDomainMapMutex.Unlock()
 
 	deadline := time.Now().Add(*blockBadDomainDuration)
 	for _, domain := range domains {
-		tmpBlockedDomain[domain] = deadline
+		badDomainMap[domain] = deadline
 	}
 	logrus.Debugf("Add domains to block '%v', dedline: '%v'", domains, deadline)
 }
 
 // if no domains blocked - return nil
-func tmpBlockDomainGetBlocked(domains []string)(res []string){
-	tmpBlockedDomainMutex.Lock()
-	defer tmpBlockedDomainMutex.Unlock()
+func badDomainsGetBad(domains []string) (res []string) {
+	badDomainMapMutex.Lock()
+	defer badDomainMapMutex.Unlock()
 
 	now := time.Now()
 	for _, domain := range domains {
-		if deadline, ok := tmpBlockedDomain[domain]; ok && now.Before(deadline) {
+		if deadline, ok := badDomainMap[domain]; ok && now.Before(deadline) {
 			res = append(res, domain)
 		}
 	}
 	return res
 }
 
-func tmpBlockDomainCleanerStart(){
-	tmpBlockedDomainMutex.Lock()
-	defer tmpBlockedDomainMutex.Unlock()
+func badDomainsStartCleaner() {
+	badDomainMapMutex.Lock()
+	defer badDomainMapMutex.Unlock()
 
 	now := time.Now()
-	toClean := make([]string, 0, len(tmpBlockedDomain))
-	for domain, deadline := range tmpBlockedDomain {
+	toClean := make([]string, 0, len(badDomainMap))
+	for domain, deadline := range badDomainMap {
 		if deadline.Before(now) {
 			toClean = append(toClean, domain)
 		}
 	}
 
 	for _, domain := range toClean {
-		delete(tmpBlockedDomain, domain)
+		delete(badDomainMap, domain)
 	}
 
 	logrus.Debugf("Clean blocked domains list, remove domains: '%v'", toClean)
 
-	time.AfterFunc(*blockBadDomainDuration, tmpBlockDomainCleanerStart)
+	time.AfterFunc(*blockBadDomainDuration, badDomainsStartCleaner)
 }

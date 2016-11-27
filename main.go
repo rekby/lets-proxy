@@ -322,7 +322,7 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 
 	domain = strings.ToLower(domain)
 
-	if tmpBlockDomainGetBlocked([]string{domain}) != nil {
+	if badDomainsGetBad([]string{domain}) != nil {
 		logrus.Infof("Temporary blocked domain: '%v'", domain)
 		return nil, errors.New("Domain temporary blocked")
 	}
@@ -434,11 +434,11 @@ forRegexpCheckDomain:
 			}
 		}
 		if len(domainsForBlock) > 0 {
-			tmpBlockDomainsAdd(domainsForBlock)
+			badDomainsAdd(domainsForBlock)
 		}
 	} else {
 		logrus.Infof("Can't obtain certificate for domains '%v': %v", allowedByRegexp, err)
-		tmpBlockDomainsAdd([]string{domain})
+		badDomainsAdd([]string{domain})
 		return nil, errors.New("Can't obtain acme certificate")
 	}
 
@@ -649,7 +649,7 @@ func prepare() {
 
 	acmeService.Init()
 
-	tmpBlockDomainCleanerStart()
+	badDomainsStartCleaner()
 }
 
 func saveState(state stateStruct) {

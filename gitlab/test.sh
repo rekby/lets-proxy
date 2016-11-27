@@ -164,7 +164,7 @@ fi
 
 echo
 echo "Check www-only domain"
-TEST=`curk -sk https://${TMP_DOMAIN3WWWONLY}`
+TEST=`curl -sk https://${TMP_DOMAIN3WWWONLY}`
 test_or_exit "HOST" "HOST: ${TMP_DOMAIN3WWWONLY}"
 if ! [ -e certificates/${TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW}.cert ] || ! grep -q ${TMP_DOMAIN3WWWONLY} certificates/${TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW}.json; then
     echo

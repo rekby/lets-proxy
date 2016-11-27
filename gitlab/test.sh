@@ -26,14 +26,18 @@ echo
 echo
 
 DOMAIN="gitlab-test.1gb.ru"
-
-TMP_SUBDOMAIN="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM.ya"
-TMP_SUBDOMAIN2="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM-2.ya"
+RND="${RANDOM}"
+TMP_SUBDOMAIN="tmp-`date +%Y-%m-%d--%H-%M-%S`--${RND}--1.ya"
+TMP_SUBDOMAIN2="tmp-`date +%Y-%m-%d--%H-%M-%S`--${RND}--2.ya"
 TMP_WWWSUBDOMAIN2="www.${TMP_SUBDOMAIN2}"
+TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW="tmp-`date +%Y-%m-%d--%H-%M-%S`--${RND}--3.ya"
+TMP_SUBDOMAIN3WWWONLY="www.${TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW}"
 
 TMP_DOMAIN="$TMP_SUBDOMAIN.$DOMAIN"
 TMP_DOMAIN2="$TMP_SUBDOMAIN2.$DOMAIN"
 TMP_WWWDOMAIN2="$TMP_WWWSUBDOMAIN2.$DOMAIN"
+TMP_DOMAIN3WWWONLY_WITHOUT_WWW="$TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW.$DOMAIN"
+TMP_DOMAIN3WWWONLY="$TMP_SUBDOMAIN3WWWONLY.$DOMAIN"
 
 echo "Tmp domain: $TMP_DOMAIN"
 
@@ -45,6 +49,7 @@ echo MY IPv6: ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN} AAAA ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN2} AAAA ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_WWWSUBDOMAIN2} AAAA ${MY_IPv6}
+./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN3WWWONLY} AAAA ${MY_IPv6}
 
 function delete_domain(){
     echo "Delete record"
@@ -59,6 +64,11 @@ function delete_domain(){
 
     echo "Delete record-2-www"
     ID=`./ypdd ${DOMAIN} list | grep ${TMP_WWWSUBDOMAIN2} | cut -d ' ' -f 1`
+    echo "ID: $ID"
+    ./ypdd $DOMAIN del $ID
+
+    echo "Delete record-3-www-only"
+    ID=`./ypdd ${DOMAIN} list | grep ${TMP_SUBDOMAIN3WWWONLY} | cut -d ' ' -f 1`
     echo "ID: $ID"
     ./ypdd $DOMAIN del $ID
 }
@@ -141,6 +151,7 @@ if [ "${CERTS_OBTAINED}" != "1" ]; then
     exit 1
 fi
 echo "Obtain only one cert for a domain same time - OK"
+sleep 3 # For more readable logs
 
 echo "Test www-optimiation"
 TEST=`curl -k https://${TMP_WWWDOMAIN2} 2>/dev/null` # Domain work
@@ -149,6 +160,20 @@ test_or_exit "HOST" "HOST: ${TMP_WWWDOMAIN2}"
 # Have metadata
 cat certificates/${TMP_DOMAIN2}.json
 if ! ( grep -q ${TMP_WWWDOMAIN2} certificates/${TMP_DOMAIN2}.json && grep -q ${TMP_WWWDOMAIN2} certificates/${TMP_DOMAIN2}.json ); then
+    delete_domain
+    exit 1
+fi
+
+echo
+echo "Check www-only domain"
+TEST=`curl -sk https://${TMP_DOMAIN3WWWONLY}`
+test_or_exit "HOST" "HOST: ${TMP_DOMAIN3WWWONLY}"
+if ! [ -e certificates/${TMP_DOMAIN3WWWONLY_WITHOUT_WWW}.crt ] || ! grep -q ${TMP_DOMAIN3WWWONLY} certificates/${TMP_DOMAIN3WWWONLY_WITHOUT_WWW}.json; then
+    echo
+    cat certificates/${TMP_DOMAIN3WWWONLY_WITHOUT_WWW}.crt
+    echo
+    cat certificates/${TMP_DOMAIN3WWWONLY_WITHOUT_WWW}.json
+
     delete_domain
     exit 1
 fi

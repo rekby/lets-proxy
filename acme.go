@@ -230,16 +230,11 @@ func (this *acmeStruct) authorizeDomain(ctx context.Context, domain string) erro
 Create a certificate for domains (all domains in one certificate).
 If can't create certificate for some of domains - certificate will be created for subset of domains.
 Caller have to check ok domains in cert.Leaf.DNSNames
+
+if main_domain != "" - return cert only if it contains main_domain.
+Doesn't try to obtain cert if check of main_domain is bad or can't authorized it.
  */
-func (this *acmeStruct) CreateCertificate(domains []string) (cert *tls.Certificate, err error) {
-	ctx, cancelFunc := context.WithTimeout(context.Background(), LETSENCRYPT_CREATE_CERTIFICATE_TIMEOUT)
-	defer func() {
-		if ctx.Err() == nil {
-			cancelFunc() // cancel all background processes. In real life - nothing.
-		} else {
-			logrus.Infof("Can't create certificate by context for domains '%v': %v", domains, ctx.Err())
-		}
-	}()
+func (this *acmeStruct) CreateCertificate(ctx context.Context, domains []string, main_domain string) (cert *tls.Certificate, err error) {
 
 	// Check suffix for avoid mutex sync in DeleteAcmeAuthDomain
 	if len(domains) == 1 && strings.HasSuffix(domains[0], ACME_DOMAIN_SUFFIX) {
@@ -257,11 +252,14 @@ func (this *acmeStruct) CreateCertificate(domains []string) (cert *tls.Certifica
 	if len(domainsForCert) == 0 {
 		return nil, errors.New("Domains is bad by self-check")
 	}
+	if main_domain != "" && !containString(domainsForCert, main_domain) {
+		return nil, errors.New("Main domain '%v' doesn't allowed by domainsCheck")
+	}
 
-	return this.createCertificateAcme(ctx, domainsForCert)
+	return this.createCertificateAcme(ctx, domainsForCert, main_domain)
 }
 
-func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []string) (cert *tls.Certificate, err error) {
+func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []string, main_domain string) (cert *tls.Certificate, err error) {
 	authorizedDomains := make([]string, 0, len(domains))
 
 
@@ -295,6 +293,10 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 
 	for domain := range authorizedDomainsChan {
 		authorizedDomains = append(authorizedDomains, domain)
+	}
+	if main_domain != "" && !containString(authorizedDomains, main_domain){
+		logrus.Info("Authorized domains '%v' doesn't contain main domain '%v'", authorizedDomains, main_domain)
+		return nil, errors.New("Authorized domains doesn't contain main domain")
 	}
 
 	// sort domains

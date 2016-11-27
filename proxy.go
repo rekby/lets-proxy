@@ -219,6 +219,7 @@ func startProxy(cid ConnectionID, targetAddr net.TCPAddr, in net.Conn) {
 	targetConnCommon, err := net.DialTimeout("tcp", targetAddr.String(), *targetConnTimeout)
 	if err != nil {
 		logrus.Warnf("Can't connect to target '%v' cid '%v': %v", targetAddr.String(), cid, err)
+		in.Close()
 		return
 	}
 

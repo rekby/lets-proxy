@@ -258,7 +258,7 @@ func (this *acmeStruct) CreateCertificate(domains []string) (cert *tls.Certifica
 		return nil, errors.New("Domains is bad by self-check")
 	}
 
-	return this.createCertificateAcme(ctx, domains)
+	return this.createCertificateAcme(ctx, domainsForCert)
 }
 
 func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []string) (cert *tls.Certificate, err error) {

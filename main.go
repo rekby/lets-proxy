@@ -507,7 +507,7 @@ func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
 	if serverName == "" {
 		serverName = *defaultDomain + " (by default)"
 	}
-	logrus.Infof("Start proxy from '%v' to '%v' cid '%v' domain '%v'", in.RemoteAddr(), target, cid, serverName)
+	logrus.Infof("Start proxy from '%v' to '%v' cid '%v' domain '%v'", in.RemoteAddr(), &target, cid, serverName)
 	startProxy(cid, target, tlsConn)
 }
 

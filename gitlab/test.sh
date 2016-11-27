@@ -30,7 +30,8 @@ DOMAIN="gitlab-test.1gb.ru"
 TMP_SUBDOMAIN="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM.ya"
 TMP_SUBDOMAIN2="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM-2.ya"
 TMP_WWWSUBDOMAIN2="www.${TMP_SUBDOMAIN2}"
-TMP_SUBDOMAIN3WWWONLY="www.tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM-2.ya"
+TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM-2.ya"
+TMP_SUBDOMAIN3WWWONLY="www.${TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW}"
 
 TMP_DOMAIN="$TMP_SUBDOMAIN.$DOMAIN"
 TMP_DOMAIN2="$TMP_SUBDOMAIN2.$DOMAIN"
@@ -164,11 +165,11 @@ echo
 echo "Check www-only domain"
 TEST=`curk -sk https://${TMP_DOMAIN3WWWONLY}`
 test_or_exit "HOST" "HOST: ${TMP_DOMAIN3WWWONLY}"
-if ! [ -e certificates/${TMP_DOMAIN3WWWONLY}.cert ] || ! grep -q ${TMP_DOMAIN3WWWONLY} certificates/${TMP_DOMAIN3WWWONLY}.json; then
+if ! [ -e certificates/${TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW}.cert ] || ! grep -q ${TMP_DOMAIN3WWWONLY} certificates/${TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW}.json; then
     echo
-    cat certificates/${TMP_DOMAIN3WWWONLY}.cert
+    cat certificates/${TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW}.cert
     echo
-    cat certificates/${TMP_DOMAIN3WWWONLY}.json
+    cat certificates/${TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW}.json
 
     delete_domain
     exit 1

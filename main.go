@@ -353,20 +353,9 @@ checkCertInCache:
 			return nil, errors.New("Get certificate timeout")
 		}
 
-		for _, testDomain := range domainsToObtain {
-			cert = certificateCacheGet(testDomain)
-			if cert == nil {
-				continue
-			}
-			if !containString(cert.Leaf.DNSNames, domain) {
-				cert = nil
-				continue
-			}
-			if cert.Leaf.NotAfter.Before(now) {
-				cert = nil
-				continue
-			}
-			break
+		cert = certificateCacheGet(baseDomain)
+		if cert != nil && !containString(cert.Leaf.DNSNames, domain) {
+			cert = nil
 		}
 
 		switch {
@@ -377,70 +366,39 @@ checkCertInCache:
 		case cert != nil:
 			// need for background cert renew
 			if cert.Leaf.NotAfter.Before(time.Now().Add(*timeToRenew)) {
-				go func(domainsToObtain []string, main_domain string) {
-					// TODO: additional check to exising certs for avoid overwrite
-					cert, err := certificateObtain(ctx, true, domainsToObtain, main_domain)
+				go func(domainsToObtain []string, baseDomain string) {
+					// TODO: additional check to exiting certs for avoid overwrite and clean by regexp
+					if obtainDomainsLock(domainsToObtain) {
+						defer obtainDomainsUnlock(domainsToObtain)
+					}
+
+					cert, err := acmeService.CreateCertificate(ctx, domainsToObtain, "")
 					if err == nil {
 						logrus.Infof("Background certificate obtained for: %v", cert.Leaf.DNSNames)
+						certificateCachePut(baseDomain, cert)
 					}
-				}(cert.Leaf.DNSNames, domain)
+				}(cert.Leaf.DNSNames, baseDomain)
 			}
 			return cert, nil
 		default:
 			// pass to obtain cert
 		}
 
-		// Check if the domain in process already
-		var needWait bool
-		certDomainsObtainingMutex.Lock()
-		for _, checkingDomain := range domainsToObtain {
-			needWait = certDomainsObtaining[checkingDomain]
-			if needWait {
-				break
-			}
-		}
-
-		// if domain isn't obtaining now - lock it
-		if !needWait {
-			for _, obtainingDomain := range domainsToObtain {
-				certDomainsObtaining[obtainingDomain] = true
-			}
-		}
-
-		certDomainsObtainingMutex.Unlock()
-
-		if needWait {
+		if obtainDomainsLock(domainsToObtain) {
+			break checkCertInCache // create cert
+		}else {
 			// wait, then cert in cache again
 			logrus.Infof("Obtain certificate in process for domain '%v', wait a second and check it again", domain)
 			time.Sleep(time.Second)
 			continue checkCertInCache
-		} else {
-			break checkCertInCache // create cert
 		}
 	}
+	defer  obtainDomainsUnlock(domainsToObtain)
 
-	defer func() {
-		certDomainsObtainingMutex.Lock()
-		for _, obtainedDomain := range domainsToObtain {
-			delete(certDomainsObtaining, obtainedDomain)
-		}
-		certDomainsObtainingMutex.Unlock()
-	}()
-
-	for _, testDomain := range domainsToObtain {
-		cert = certificateCacheGet(testDomain)
-		if cert == nil {
-			continue
-		}
-		if !containString(cert.Leaf.DNSNames, domain) {
-			cert = nil
-			continue
-		}
-		if cert.Leaf.NotAfter.Before(now) {
-			cert = nil
-			continue
-		}
-		break
+	// check if get cert between check cache and lock to obtain
+	cert = certificateCacheGet(baseDomain)
+	if cert != nil && !containString(cert.Leaf.DNSNames, domain) {
+		cert = nil
 	}
 
 	if cert != nil {
@@ -448,7 +406,7 @@ checkCertInCache:
 	}
 
 	allowedByRegexp := make([]string, len(domainsToObtain))
-	forRegexpCheckDomain:
+forRegexpCheckDomain:
 	for _, checkDomain := range domainsToObtain {
 		for _, re := range nonCertDomainsRegexps {
 			if re.MatchString(domain) {
@@ -459,7 +417,7 @@ checkCertInCache:
 		allowedByRegexp = append(allowedByRegexp, checkDomain)
 	}
 	logrus.Debug("Allowed domains by regexp for '%v': '%v'", domainsToObtain, allowedByRegexp)
-	if !containString(allowedByRegexp, domain){
+	if !containString(allowedByRegexp, domain) {
 		return nil, errors.New("Reject domain by regexp")
 	}
 
@@ -471,54 +429,6 @@ checkCertInCache:
 	}
 
 	return cert, err
-}
-
-/*
-obtain certificate for set of domains.
-return cert, nil if it can obtain certificate for main_domain.
-Any of other domains may be doesn't exists in returned certificate
-*/
-func certificateObtain(ctx context.Context, lockObtain bool, domains []string, main_domain string) (cert *tls.Certificate, err error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	if lockObtain {
-		certDomainsObtainingMutex.Lock()
-		obtainInProcess := false
-		for _, obtainedDomain := range domains {
-			obtainInProcess = obtainInProcess || certDomainsObtaining[obtainedDomain]
-		}
-
-		if !obtainInProcess {
-			for _, obtain_domain := range domains {
-				certDomainsObtaining[obtain_domain] = true
-			}
-
-			defer func() {
-				certDomainsObtainingMutex.Lock()
-				for _, obtain_domain := range domains {
-					delete(certDomainsObtaining, obtain_domain)
-				}
-
-				certDomainsObtainingMutex.Unlock()
-			}()
-		}
-		certDomainsObtainingMutex.Unlock()
-
-		if obtainInProcess {
-			return nil, errCertiObtainInProcess
-		}
-	}
-
-	newCert, err := acmeService.CreateCertificate(ctx, domains, main_domain)
-	if err == nil {
-		certificateCachePut(cert.Leaf.DNSNames[0], newCert)
-	} else {
-		return nil, err
-	}
-
-	return newCert, nil
 }
 
 func getTargetAddr(in *net.TCPConn) (net.TCPAddr, error) {
@@ -585,6 +495,48 @@ func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
 	}
 	logrus.Infof("Start proxy from '%v' to '%v' cid '%v' domain '%v'", in.RemoteAddr(), target, cid, serverName)
 	startProxy(cid, target, tlsConn)
+}
+
+/*
+Check for all of domains doesn't in obtaining process. If ok - lock all domains and return true.
+If any of domains already in obtaining process - return false and lock nothing.
+*/
+func obtainDomainsLock(domains []string) bool {
+	certDomainsObtainingMutex.Lock()
+	defer certDomainsObtainingMutex.Unlock()
+
+	alreadyObtaining := false
+	for _, domain := range domains {
+		alreadyObtaining = certDomainsObtaining[domain]
+		if alreadyObtaining {
+			return false
+		}
+	}
+
+	for _, domain := range domains {
+		certDomainsObtaining[domain] = true
+	}
+	return true
+}
+
+/*
+Unlock all domains from obtaining lock without any check
+ */
+func obtainDomainsUnlock(domains []string) {
+	certDomainsObtainingMutex.Lock()
+	defer certDomainsObtainingMutex.Unlock()
+
+	if logrus.GetLevel() >= logrus.DebugLevel {
+		for _, domain := range domains {
+			if !certDomainsObtaining[domain] {
+				logrus.Debugf("Release from obtain cert not locked domain: %v", domain)
+			}
+		}
+	}
+
+	for _, domain := range domains {
+		delete(certDomainsObtaining, domain)
+	}
 }
 
 func prepare() {

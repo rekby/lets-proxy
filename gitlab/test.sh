@@ -45,10 +45,10 @@ tar -zxvf ypdd-linux-amd64.tar.gz
 
 MY_IPv6=`curl -s6 http://ifconfig.io/ip 2>/dev/null`
 echo MY IPv6: ${MY_IPv6}
+./ypdd --sync ${DOMAIN} add ${TMP_DOMAIN3WWWONLY} AAAA ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN} AAAA ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN2} AAAA ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_WWWSUBDOMAIN2} AAAA ${MY_IPv6}
-./ypdd --sync ${DOMAIN} add ${TMP_DOMAIN3WWWONLY} AAAA ${MY_IPv6}
 
 function delete_domain(){
     echo "Delete record"

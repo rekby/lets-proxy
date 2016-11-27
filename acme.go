@@ -78,7 +78,7 @@ func (this *acmeStruct) Cleanup() {
 
 func (this *acmeStruct) CleanupTimer() {
 	this.Cleanup()
-	time.AfterFunc(SNI01_EXPIRE_TOKEN, this.Cleanup)
+	time.AfterFunc(SNI01_EXPIRE_TOKEN, this.CleanupTimer)
 }
 
 func (this *acmeStruct) CreateCertificate(domain string) (cert *tls.Certificate, err error) {

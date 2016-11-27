@@ -73,6 +73,7 @@ var (
 	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain doesn't available (have zero length). For example client doesn't support SNI. It used for obtain and use certificate only. It isn't forse set header HOST in request.")
 	tcpKeepAliveInterval          = flag.Duration("tcp-keepalive-interval", time.Minute, "Interval between send tcp keepalive packages detect dead connections")
 	certJsonInfo                  = flag.Bool("cert-json", false, "Save json info about certificate near the certificate file with same name with .json extension")
+	disableWWWOptimization        = flag.Bool("disable-www-optimization", false, "Disable one cert for domain.com and www.domain.com (instead of separate certificates)")
 )
 
 var (
@@ -314,19 +315,35 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 		return nil, errors.New("Bad domain name")
 	}
 	domain = strings.ToLower(domain)
+	var baseDomain string
+	if !*disableWWWOptimization && strings.HasPrefix(domain, "www.") {
+		baseDomain = domain[4:]
+	}
+
 	if logrus.GetLevel() >= logrus.DebugLevel {
 		logrus.Debugf("Required certificate for domain '%v'", domain)
 	}
 
 	if strings.HasSuffix(domain, ACME_DOMAIN_SUFFIX) {
 		// force generate new certificate, without caching.
-		return acmeService.CreateCertificate(domain)
+		return acmeService.CreateCertificate([]string{domain})
 	}
 
 	now := time.Now()
 checkCertInCache:
 	for {
-		cert = certificateCacheGet(domain)
+		if baseDomain == "" {
+			cert = certificateCacheGet(domain)
+		} else {
+			cert = certificateCacheGet(baseDomain)
+			if cert != nil && !containString(cert.Leaf.DNSNames, domain) {
+				cert = nil
+			}
+
+			if cert == nil {
+				cert = certificateCacheGet(domain)
+			}
+		}
 
 		switch {
 		case cert != nil && cert.Leaf.NotAfter.Before(now):
@@ -335,15 +352,25 @@ checkCertInCache:
 
 		case cert != nil:
 			// need for background cert renew
-			if cert.Leaf != nil && cert.Leaf.NotAfter.Before(time.Now().Add(*timeToRenew)) {
-				go func() {
+			if cert.Leaf.NotAfter.Before(time.Now().Add(*timeToRenew)) {
+				go func(domainsToObtain []string) {
 					certDomainsObtainingMutex.Lock()
-					obtainInProcess := certDomainsObtaining[domain]
+					obtainInProcess := false
+					for _, obtainedDomain := range domainsToObtain {
+						obtainInProcess = obtainInProcess || certDomainsObtaining[obtainedDomain]
+					}
+
 					if !obtainInProcess {
-						certDomainsObtaining[domain] = true
+						for _, obtain_domain := range domainsToObtain {
+							certDomainsObtaining[obtain_domain] = true
+						}
+
 						defer func() {
 							certDomainsObtainingMutex.Lock()
-							delete(certDomainsObtaining, domain)
+							for _, obtain_domain := range domainsToObtain {
+								delete(certDomainsObtaining, obtain_domain)
+							}
+
 							certDomainsObtainingMutex.Unlock()
 						}()
 					}
@@ -353,11 +380,11 @@ checkCertInCache:
 						return
 					}
 
-					newCert, err := acmeService.CreateCertificate(domain)
+					newCert, err := acmeService.CreateCertificate(cert.Leaf.DNSNames)
 					if err == nil {
 						certificateCachePut(domain, newCert)
 					}
-				}()
+				}(cert.Leaf.DNSNames)
 			}
 			return cert, nil
 		default:
@@ -367,10 +394,19 @@ checkCertInCache:
 		// Check if the domain in process already
 		certDomainsObtainingMutex.Lock()
 
-		needWait := certDomainsObtaining[domain]
-		if !needWait {
-			// other requests will wait
-			certDomainsObtaining[domain] = true
+		var needWait bool
+		if baseDomain == "" {
+			needWait = certDomainsObtaining[domain]
+			if !needWait {
+				// other requests will wait
+				certDomainsObtaining[domain] = true
+			}
+		} else {
+			needWait = certDomainsObtaining[domain] || certDomainsObtaining[baseDomain]
+			if !needWait {
+				certDomainsObtaining[domain] = true
+				certDomainsObtaining[baseDomain] = true
+			}
 		}
 		certDomainsObtainingMutex.Unlock()
 
@@ -380,18 +416,28 @@ checkCertInCache:
 			time.Sleep(time.Second)
 			continue checkCertInCache
 		} else {
-			break checkCertInCache
+			break checkCertInCache // create cert
 		}
 	}
 
 	defer func() {
 		certDomainsObtainingMutex.Lock()
 		delete(certDomainsObtaining, domain)
+		if baseDomain != "" {
+			delete(certDomainsObtaining, baseDomain)
+		}
 		certDomainsObtainingMutex.Unlock()
 	}()
 
 	// check if certificate obtained between check cache and check obtaining lock
-	cert = certificateCacheGet(domain) // check if cert obtained before lock
+	if baseDomain == "" {
+		cert = certificateCacheGet(domain)
+	} else {
+		cert = certificateCacheGet(baseDomain)
+		if cert != nil && !containString(cert.Leaf.DNSNames, domain) {
+			cert = certificateCacheGet(domain)
+		}
+	}
 	if cert != nil && cert.Leaf.NotAfter.Before(now) {
 		return cert, nil
 	}
@@ -403,9 +449,24 @@ checkCertInCache:
 		}
 	}
 
-	cert, err = acmeService.CreateCertificate(domain)
+	var domainsToObtain []string
+	if *disableWWWOptimization {
+		domainsToObtain = []string{domain}
+	} else {
+		if baseDomain == "" {
+			domainsToObtain = []string{domain, "www." + domain}
+		} else {
+			domainsToObtain = []string{baseDomain, domain}
+		}
+	}
+
+	cert, err = acmeService.CreateCertificate(domainsToObtain)
 	if err == nil {
-		certificateCachePut(domain, cert)
+		if baseDomain == "" {
+			certificateCachePut(domain, cert)
+		} else {
+			certificateCachePut(baseDomain, cert)
+		}
 	} else {
 		return nil, errors.New("Can't obtain acme certificate")
 	}
@@ -701,6 +762,15 @@ func startTimeLogRotator(logger *lumberjack.Logger) {
 		logrus.Info("Rotate log:", *logrotateTime)
 		logger.Rotate()
 	}
+}
+
+func containString(slice []string, s string)bool{
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }
 
 func usage() {

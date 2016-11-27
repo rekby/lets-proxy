@@ -26,11 +26,11 @@ echo
 echo
 
 DOMAIN="gitlab-test.1gb.ru"
-
-TMP_SUBDOMAIN="tmp-`date +%Y-%m-%d--%H-%M-%S`--$RANDOM$RANDOM.ya"
-TMP_SUBDOMAIN2="tmp-`date +%Y-%m-%d--%H-%M-%S`-2-$RANDOM$RANDOM-2.ya"
+RND="RANDOM$RANDOM"
+TMP_SUBDOMAIN="tmp-`date +%Y-%m-%d--%H-%M-%S`--${RND}--1.ya"
+TMP_SUBDOMAIN2="tmp-`date +%Y-%m-%d--%H-%M-%S`--${RND}--2.ya"
 TMP_WWWSUBDOMAIN2="www.${TMP_SUBDOMAIN2}"
-TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW="tmp-`date +%Y-%m-%d--%H-%M-%S`-3-$RANDOM$RANDOM-2.ya"
+TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW="tmp-`date +%Y-%m-%d--%H-%M-%S`--${RND}--3.ya"
 TMP_SUBDOMAIN3WWWONLY="www.${TMP_SUBDOMAIN3WWWONLY_WITHOUT_WWW}"
 
 TMP_DOMAIN="$TMP_SUBDOMAIN.$DOMAIN"
@@ -48,6 +48,7 @@ echo MY IPv6: ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN} AAAA ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_SUBDOMAIN2} AAAA ${MY_IPv6}
 ./ypdd --sync ${DOMAIN} add ${TMP_WWWSUBDOMAIN2} AAAA ${MY_IPv6}
+./ypdd --sync ${DOMAIN} add ${TMP_DOMAIN3WWWONLY} AAAA ${MY_IPv6}
 
 function delete_domain(){
     echo "Delete record"

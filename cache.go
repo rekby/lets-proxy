@@ -48,7 +48,7 @@ func certificateCacheGet(domain string) *tls.Certificate {
 		logrus.Infof("Have no certificate/key in cert-dir for domain '%v'", domain)
 		return nil
 	default:
-		logrus.Errorf("Can't certificate/key load from file for domain '%v': %v", domain)
+		logrus.Errorf("Can't certificate/key load from file for domain '%v': %v", domain, err)
 		return nil
 	}
 

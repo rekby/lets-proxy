@@ -85,7 +85,7 @@ var (
 	acmeService            *acmeStruct
 	nonCertDomainsRegexps  []*regexp.Regexp
 	paramTargetTcpAddr     *net.TCPAddr
-	subdomainsForUnion []string
+	subdomainPrefixedForUnion []string
 )
 
 // constants in var
@@ -327,9 +327,9 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 	var baseDomain = domain
 	var domainsToObtain []string
 
-	for _, subdomain := range subdomainsForUnion {
-		baseDomain = strings.TrimPrefix(domain, subdomain)
-		if len(baseDomain) != len(domain) {
+	for _, subdomainPrefix := range subdomainPrefixedForUnion {
+		if strings.HasPrefix(domain, subdomainPrefix) {
+			baseDomain = domain[len(subdomainPrefix):]
 			break
 		}
 	}
@@ -386,9 +386,9 @@ checkCertInCache:
 		}
 
 		if domainsToObtain == nil {
-			domainsToObtain = make([]string, 1, len(subdomainsForUnion) + 1)
+			domainsToObtain = make([]string, 1, len(subdomainPrefixedForUnion) + 1)
 			domainsToObtain[0] = baseDomain
-			for _, subdomain := range subdomainsForUnion {
+			for _, subdomain := range subdomainPrefixedForUnion {
 				domainsToObtain = append(domainsToObtain, subdomain + baseDomain)
 			}
 		}
@@ -623,11 +623,11 @@ func prepare() {
 	if *subdomainsUnionS == "www" && *disableWWWOptimization {
 		*subdomainsUnionS = ""
 	}
-	subdomainsForUnion = strings.Split(*subdomainsUnionS, ",")
-	for i := range subdomainsForUnion {
-		subdomainsForUnion[i] = subdomainsForUnion[i] + "."
+	subdomainPrefixedForUnion = strings.Split(*subdomainsUnionS, ",")
+	for i := range subdomainPrefixedForUnion {
+		subdomainPrefixedForUnion[i] = subdomainPrefixedForUnion[i] + "."
 	}
-	logrus.Info("Subdomain union: ", subdomainsForUnion)
+	logrus.Info("Subdomain union: ", subdomainPrefixedForUnion)
 
 	// init service
 	var state stateStruct

@@ -40,30 +40,30 @@ const (
 )
 
 var (
-	parallelAcmeRequests          = flag.Int("acme-parallel", 10, "count of parallel requests for acme server")
-	acmeApiUrl                    = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
+	acmeParallelCount             = flag.Int("acme-parallel", 10, "count of parallel requests for acme server")
+	acmeServerUrl                 = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
 	additionalHeadersParam        = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Several headers separated by comma.")
 	allowIPRefreshInterval        = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often allow ip addresses will be refreshed. Allowable format https://golang.org/pkg/time/#ParseDuration")
 	allowIPsString                = flag.String("allowed-ips", "auto", "allowable ip-addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, it logic can change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to http://ifconfig.io/ip - it need for public ip autodetection behinde nat.")
 	bindTo                        = flag.String("bind-to", ":443", "")
 	blockBadDomainDuration        = flag.Duration("block-bad-domain-duration", time.Hour, "Disable try obtain certtificate for domain after error")
 	certDir                       = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
-	certJsonInfo                  = flag.Bool("cert-json", false, "Save json info about certificate near the certificate file with same name with .json extension")
-	connectionIDHeader            = flag.String("connection-id-header", "", "Header name for send connection id to backend in http proxy mode. Default it isn't send.")
+	certJsonSave                  = flag.Bool("cert-json", false, "Save json info about certificate near the certificate file with same name with .json extension")
+	connectionIdHeader            = flag.String("connection-id-header", "", "Header name for send connection id to backend in http proxy mode. Default it isn't send.")
 	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain doesn't available (have zero length). For example client doesn't support SNI. It used for obtain and use certificate only. It isn't forse set header HOST in request.")
 	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind nat.")
-	certMemCount                  = flag.Int("in-memory-cnt", 100, "How many count of certs cache in memory for prevent parse it from file")
+	inMemoryCertCount             = flag.Int("in-memory-cnt", 100, "How many count of certs cache in memory for prevent parse it from file")
 	logLevel                      = flag.String("loglevel", "warning", "fatal|error|warning|info|debug")
 	logOutput                     = flag.String("logout", "-", "Path to logout. Special: '-' (without quotes) - stderr")
 	logrotateMaxAge               = flag.Int("logrotate-age", 30, "How many days keep old backups")
-	logrotateMaxBackups           = flag.Int("logrotate-count", 30, "How many old backups keep. 0 mean infinite")
-	logrotateSize                 = flag.Int("logrotate-mb", 100, "logrotate by size in megabytes. 0 Mean no logrotate by size.")
+	logrotateMaxCount             = flag.Int("logrotate-count", 30, "How many old backups keep. 0 mean infinite")
+	logrotateMb                   = flag.Int("logrotate-mb", 100, "logrotate by size in megabytes. 0 Mean no logrotate by size.")
 	logrotateTime                 = flag.String("logrotate-time", "", "minutely|hourly|daily|weekly|monthly|yearly|\"\", empty or none mean no logrotate by time. Weekly - rotate log at midnight from sunday to monday")
 	minTLSVersion                 = flag.String("min-tls", "", "Minimul supported tls version: ssl3,tls10,tls11,tls12. Default is golang's default.")
 	noLogStderr                   = flag.Bool("no-log-stderr", false, "supress log to stderr")
 	nonCertDomains                = flag.String("non-cert-domains", "", "No obtain certificate for mathed domains. Regexpes separated by comma.")
 	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
-	httpRealIPHeader              = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
+	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
 	serviceAction                 = flag.String("service-action", "", "start,stop,install,uninstall,reinstall")
 	serviceName                   = flag.String("service-name", SERVICE_NAME_EXAMPLE, "service name, need for service actions")
 	stateFilePath                 = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
@@ -77,16 +77,16 @@ var (
 	workingDir                    = flag.String(WORKING_DIR_ARG_NAME, "", "Set working dir")
 
 	// DEPRECATED
-	disableWWWOptimization        = flag.Bool("disable-www-optimization", false, "Disable one cert for domain.com and www.domain.com (instead of separate certificates). DEPRECATED. WILL BE DELETED IN NEAR FUTURE. Use subdomain-union instead it.")
+	disableWWWOptimization = flag.Bool("disable-www-optimization", false, "Disable one cert for domain.com and www.domain.com (instead of separate certificates). DEPRECATED. WILL BE DELETED IN NEAR FUTURE. Use subdomain-union instead it.")
 )
 
 var (
-	realIPHeaderNames      [][]byte // IP headers, generated by the proxy, included real IP address
-	cutHeaders             [][]byte // internal - all headers, that cut from request (upper case).
-	additionalHeaders      []byte   // prepared additional headers
-	acmeService            *acmeStruct
-	nonCertDomainsRegexps  []*regexp.Regexp
-	paramTargetTcpAddr     *net.TCPAddr
+	realIPHeaderNames         [][]byte // IP headers, generated by the proxy, included real IP address
+	cutHeaders                [][]byte // internal - all headers, that cut from request (upper case).
+	additionalHeaders         []byte   // prepared additional headers
+	acmeService               *acmeStruct
+	nonCertDomainsRegexps     []*regexp.Regexp
+	paramTargetTcpAddr        *net.TCPAddr
 	subdomainPrefixedForUnion []string
 )
 
@@ -139,12 +139,12 @@ func main() {
 	if *logOutput != "-" {
 		lr := &lumberjack.Logger{
 			Filename:   *logOutput,
-			MaxSize:    *logrotateSize,
+			MaxSize:    *logrotateMb,
 			MaxAge:     *logrotateMaxAge,
-			MaxBackups: *logrotateMaxBackups,
+			MaxBackups: *logrotateMaxCount,
 			LocalTime:  true,
 		}
-		if *logrotateSize == 0 {
+		if *logrotateMb == 0 {
 			lr.MaxSize = int(math.MaxInt32) // about 2 Petabytes. Really no reachable in this scenario.
 		}
 		defer lr.Close()
@@ -388,10 +388,10 @@ checkCertInCache:
 		}
 
 		if domainsToObtain == nil {
-			domainsToObtain = make([]string, 1, len(subdomainPrefixedForUnion) + 1)
+			domainsToObtain = make([]string, 1, len(subdomainPrefixedForUnion)+1)
 			domainsToObtain[0] = baseDomain
 			for _, subdomain := range subdomainPrefixedForUnion {
-				domainsToObtain = append(domainsToObtain, subdomain + baseDomain)
+				domainsToObtain = append(domainsToObtain, subdomain+baseDomain)
 			}
 		}
 
@@ -567,7 +567,7 @@ func prepare() {
 		logrus.Info("Non cert domain regexps: ", "['"+strings.Join(regexps, "', '")+"']")
 	}
 
-	for _, line := range strings.Split(*httpRealIPHeader, ",") {
+	for _, line := range strings.Split(*realIPHeader, ",") {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			realIPHeaderNames = append(realIPHeaderNames, []byte(line))
@@ -592,9 +592,9 @@ func prepare() {
 
 	initAllowedIPs()
 	acmeService = &acmeStruct{}
-	if *certMemCount > 0 {
-		logrus.Infof("Create memory cache for '%v' certificates", *certMemCount)
-		certMemCache, err = lru.New(*certMemCount)
+	if *inMemoryCertCount > 0 {
+		logrus.Infof("Create memory cache for '%v' certificates", *inMemoryCertCount)
+		certMemCache, err = lru.New(*inMemoryCertCount)
 		if err != nil {
 			logrus.Errorf("Can't create memory cache:", err)
 			certMemCache = nil
@@ -648,7 +648,7 @@ func prepare() {
 	if *acmeTestServer {
 		acmeService.serverAddress = LETSENCRYPT_STAGING_API_URL
 	} else {
-		acmeService.serverAddress = *acmeApiUrl
+		acmeService.serverAddress = *acmeServerUrl
 	}
 
 	if state.PrivateKey == nil {

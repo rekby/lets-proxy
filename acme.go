@@ -27,12 +27,12 @@ const (
 )
 
 type acmeStruct struct {
-	serverAddress         string
-	privateKey            *rsa.PrivateKey
-	acmePool              *acmeClientPool
-	timeToRenew           time.Duration
+	serverAddress string
+	privateKey    *rsa.PrivateKey
+	acmePool      *acmeClientPool
+	timeToRenew   time.Duration
 
-	mutex                 *sync.Mutex
+	mutex *sync.Mutex
 
 	authDomainsMutex      *sync.Mutex
 	authDomains           map[string]time.Time
@@ -65,7 +65,7 @@ func (this *acmeStruct) authDomainPut(domain string) {
 }
 
 // return ok domains for create cert. Order or returned domains unspecified.
-func (this *acmeStruct) checkDomains(ctx context.Context, domains []string)[]string{
+func (this *acmeStruct) checkDomains(ctx context.Context, domains []string) []string {
 	logrus.Debugf("Check allowable of domains for: %v", domains)
 	wg := &sync.WaitGroup{}
 	wg.Add(len(domains))
@@ -73,7 +73,7 @@ func (this *acmeStruct) checkDomains(ctx context.Context, domains []string)[]str
 	allowed := make(chan string, len(domains))
 
 	for _, domain := range domains {
-		go func(check_domain string){
+		go func(check_domain string) {
 			defer func() {
 				err := recover()
 				if err != nil {
@@ -87,7 +87,7 @@ func (this *acmeStruct) checkDomains(ctx context.Context, domains []string)[]str
 		}(domain)
 	}
 
-	go func(){
+	go func() {
 		wg.Wait()
 		close(allowed)
 	}()
@@ -233,7 +233,7 @@ Caller have to check ok domains in cert.Leaf.DNSNames
 
 if main_domain != "" - return cert only if it contains main_domain.
 Doesn't try to obtain cert if check of main_domain is bad or can't authorized it.
- */
+*/
 func (this *acmeStruct) CreateCertificate(ctx context.Context, domains []string, main_domain string) (cert *tls.Certificate, err error) {
 
 	// Check suffix for avoid mutex sync in DeleteAcmeAuthDomain
@@ -262,14 +262,13 @@ func (this *acmeStruct) CreateCertificate(ctx context.Context, domains []string,
 func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []string, main_domain string) (cert *tls.Certificate, err error) {
 	authorizedDomains := make([]string, 0, len(domains))
 
-
 	authorizedDomainsChan := make(chan string, len(domains))
 	wg := &sync.WaitGroup{}
 	wg.Add(len(domains))
 
 	for _, domain := range domains {
-		go func(auth_domain string){
-			defer func(){
+		go func(auth_domain string) {
+			defer func() {
 				err := recover()
 				if err != nil {
 					logrus.Errorf("Panic while authorize domain '%v': %v", auth_domain, err)
@@ -286,7 +285,7 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 		}(domain)
 	}
 
-	go func(){
+	go func() {
 		wg.Wait()
 		close(authorizedDomainsChan)
 	}()
@@ -294,13 +293,13 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 	for domain := range authorizedDomainsChan {
 		authorizedDomains = append(authorizedDomains, domain)
 	}
-	if main_domain != "" && !containString(authorizedDomains, main_domain){
+	if main_domain != "" && !containString(authorizedDomains, main_domain) {
 		logrus.Info("Authorized domains '%v' doesn't contain main domain '%v'", authorizedDomains, main_domain)
 		return nil, errors.New("Authorized domains doesn't contain main domain")
 	}
 
 	// sort domains
-	for i := 0; i < len(authorizedDomains)-1; i++{
+	for i := 0; i < len(authorizedDomains)-1; i++ {
 		l := strings.ToLower(authorizedDomains[i])
 		r := strings.ToLower(authorizedDomains[i+1])
 
@@ -420,7 +419,7 @@ func (this *acmeStruct) createCertificateSelfSigned(domain string) (cert *tls.Ce
 }
 
 func (this *acmeStruct) Init() {
-	this.acmePool = NewAcmeClientPool(*parallelAcmeRequests, this.privateKey, this.serverAddress)
+	this.acmePool = NewAcmeClientPool(*acmeParallelCount, this.privateKey, this.serverAddress)
 
 	this.mutex = &sync.Mutex{}
 

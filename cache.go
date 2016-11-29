@@ -144,7 +144,7 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 
 	logrus.Infof("Save certificate for domain '%v' to files: %v, %v", domain, keyPath, certPath)
 
-	if *certJsonInfo {
+	if *certJsonSave {
 		if cert.Leaf != nil {
 			info := struct {
 				Domains    []string

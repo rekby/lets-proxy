@@ -196,8 +196,8 @@ readHeaderLines:
 	}
 
 	// Write CID
-	if *connectionIDHeader != "" {
-		headerBuf.WriteString(*connectionIDHeader)
+	if *connectionIdHeader != "" {
+		headerBuf.WriteString(*connectionIdHeader)
 		headerBuf.WriteString(": ")
 		headerBuf.WriteString(cid.String())
 		headerBuf.WriteString("\r\n")

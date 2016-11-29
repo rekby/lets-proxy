@@ -1,3 +1,5 @@
+*.exe
+
 .idea/
 lets-proxy.iml
 state.json

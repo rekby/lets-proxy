@@ -87,8 +87,8 @@ readHeaderLines:
 			break readHeaderLines
 		}
 
-		headerName := headerStart[:len(headerStart)-1]
-		headerNameUpperCase := bytes.ToUpper(headerName) // Cut trailing colon from start
+		headerName := headerStart[:len(headerStart)-1]// Cut trailing colon from start
+		headerNameUpperCase := bytes.ToUpper(headerName)
 
 		skipHeader := false
 		for _, ownHeader := range cutHeaders {

@@ -711,8 +711,19 @@ func startListener() (*net.TCPListener, error) {
 	// Start listen
 	tcpAddr, err := net.ResolveTCPAddr("tcp", *bindTo)
 	if err != nil {
-		logrus.Panicf("Can't resolve bind-to address '%v': %v", *bindTo, err)
+		ip := net.ParseIP(*bindTo)
+		if ip != nil {
+			tcpAddr = &net.TCPAddr{
+				IP:ip,
+				Port:443, // default https port
+			}
+		}
 	}
+
+	if tcpAddr == nil {
+		logrus.Panicf("Can't parse bind-to address '%v'", *bindTo)
+	}
+
 	logrus.Infof("Start listen: %v", tcpAddr)
 
 	listener, err := net.ListenTCP("tcp", tcpAddr)

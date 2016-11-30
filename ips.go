@@ -50,26 +50,22 @@ func getAllowIPs() ipSlice {
 }
 
 func getLocalIPs() (res ipSlice) {
-	bindAddr, _ := net.ResolveTCPAddr("tcp", *bindTo)
-	if bindAddr.IP.IsUnspecified() || len(bindAddr.IP) == 0 {
-		addresses, err := net.InterfaceAddrs()
-		if err != nil {
-			logrus.Error("Can't get local ip addresses:", err)
-			return nil
-		}
-		res = make([]net.IP, 0, len(addresses))
-		for _, addr := range addresses {
-			logrus.Info("Local ip: ", addr.String())
-			ip, _, err := net.ParseCIDR(addr.String())
-			if err == nil {
-				res = append(res, ip)
-			} else {
-				logrus.Errorf("Can't parse local ip '%v': %v", addr.String(), err)
-			}
-		}
-	} else {
-		res = []net.IP{bindAddr.IP}
+	addresses, err := net.InterfaceAddrs()
+	if err != nil {
+		logrus.Error("Can't get local ip addresses:", err)
+		return nil
 	}
+	res = make([]net.IP, 0, len(addresses))
+	for _, addr := range addresses {
+		logrus.Info("Local ip: ", addr.String())
+		ip, _, err := net.ParseCIDR(addr.String())
+		if err == nil {
+			res = append(res, ip)
+		} else {
+			logrus.Errorf("Can't parse local ip '%v': %v", addr.String(), err)
+		}
+	}
+
 	if logrus.GetLevel() >= logrus.InfoLevel {
 		ipStrings := make([]string, len(res))
 		for i, addr := range res {
@@ -150,6 +146,9 @@ forAllowed:
 				bindedIP = bindedTcpAddr.IP
 			}
 			if bindedIP == nil {
+				bindedIP = net.ParseIP(*bindTo)
+			}
+			if bindedIP == nil {
 				needUpdateAllowedIpList = true
 				logrus.Debug("No binded ip, autodetect all local ips.")
 				localIPs = getLocalIPs()
@@ -157,7 +156,7 @@ forAllowed:
 			} else {
 				logrus.Debug("Add binded IP:", bindedIP)
 				localIPs = ipSlice{bindedIP}
-				if isPublicIp(bindedTcpAddr.IP) {
+				if isPublicIp(bindedIP) {
 					logrus.Debug("Binded IP is public. Stop autodetection")
 					continue forAllowed
 				}
@@ -262,11 +261,11 @@ func parseNet(s string) net.IPNet {
 	_, ipnet, err := net.ParseCIDR(s)
 	if err != nil {
 		logrus.Errorf("Can't parse cidr '%v': %v", s, err)
-		return  net.IPNet{}
+		return net.IPNet{}
 	}
 	if ipnet == nil {
 		logrus.Error("Can't parse cidr '%v', nil result.", s)
-		return  net.IPNet{}
+		return net.IPNet{}
 	}
 	return *ipnet
 }

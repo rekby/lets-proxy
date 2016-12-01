@@ -13,12 +13,13 @@ type letsService struct{}
 
 func (*letsService) Start(s service.Service) error {
 	logrus.Info("Start service")
-	listener, err := startListener()
-	if listener != nil {
-		go acceptConnections(listener)
+	listeners := startListeners()
+	if listeners == nil {
+		return errors.New(fmt.Sprint("Can't start any listeners"))
+	} else {
+		go acceptConnections(listeners)
 		return nil
 	}
-	return errors.New(fmt.Sprint("Can't start listener with nil error: ", err))
 }
 
 func (*letsService) Stop(s service.Service) error {

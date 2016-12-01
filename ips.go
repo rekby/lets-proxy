@@ -122,7 +122,6 @@ func getIpByExternalRequest() (res ipSlice) {
 func initAllowedIPs() {
 	var allowedIPs ipSlice
 
-forAllowed:
 	for _, allowed := range strings.Split(*allowIPsString, ",") {
 		allowed = strings.TrimSpace(allowed)
 		switch {
@@ -138,45 +137,80 @@ forAllowed:
 			allowedIPs = append(allowedIPs, getIpByExternalRequest()...)
 		case allowed == "auto":
 			logrus.Debug("Autodetect ips")
-			bindedTcpAddr, _ := net.ResolveTCPAddr("tcp", *bindTo)
-			var bindedIP net.IP
-			var localIPs ipSlice
 
-			if bindedTcpAddr != nil && len(bindedTcpAddr.IP) > 0 && !bindedTcpAddr.IP.IsUnspecified() {
-				bindedIP = bindedTcpAddr.IP
-			}
-			if bindedIP == nil {
-				bindedIP = net.ParseIP(*bindTo)
-			}
-			if bindedIP == nil {
-				needUpdateAllowedIpList = true
-				logrus.Debug("No binded ip, autodetect all local ips.")
-				localIPs = getLocalIPs()
-				allowedIPs = append(allowedIPs, localIPs...)
-			} else {
-				logrus.Debug("Add binded IP:", bindedIP)
-				localIPs = ipSlice{bindedIP}
-				if isPublicIp(bindedIP) {
-					logrus.Debug("Binded IP is public. Stop autodetection")
-					continue forAllowed
+			hasUnspecifiedIpv4 := false
+			hasUnspecifiedIpv6 := false
+			hasIpv4 := false
+			hasIpv6 := false
+
+			var autoAllowedIps ipSlice
+
+			for _, tcpAddr := range bindTo {
+				switch {
+				case tcpAddr.IP.Equal(net.IPv4zero):
+					hasUnspecifiedIpv4 = true
+					hasIpv4 = true
+				case tcpAddr.IP.Equal(net.IPv6unspecified):
+					hasUnspecifiedIpv6 = true
+					hasIpv6 = true
+				case tcpAddr.IP == nil:
+					hasUnspecifiedIpv4 = true
+					hasUnspecifiedIpv6 = true
+					hasIpv4 = true
+					hasIpv6 = true
+				default:
+					if len(tcpAddr.IP) == net.IPv4len {
+						hasIpv4 = true
+						logrus.Debugf("Add binded ipv4 to allowed: %v", tcpAddr.IP)
+						autoAllowedIps = append(autoAllowedIps, tcpAddr.IP)
+					} else {
+						hasIpv6 = true
+						logrus.Debugf("Add binded ipv6 to allowed: %v", tcpAddr.IP)
+						autoAllowedIps = append(autoAllowedIps, tcpAddr.IP)
+					}
 				}
 			}
 
+			var localIPs ipSlice
+			if hasUnspecifiedIpv6 || hasUnspecifiedIpv4 {
+				needUpdateAllowedIpList = true
+				logrus.Debug("Has unspecified ip addresses, autodetect all local ips.")
+				localIPs = getLocalIPs()
+				for _, ip := range localIPs {
+					if hasUnspecifiedIpv4 && len(ip) == net.IPv4len ||
+						hasUnspecifiedIpv6 && len(ip) == net.IPv6len {
+						autoAllowedIps = append(autoAllowedIps, ip)
+					}
+				}
+			}
+
+
 			hasPublicIPv4 := false
-			for _, ip := range localIPs {
+			for _, ip := range autoAllowedIps {
 				if ip.To4() != nil && isPublicIp(ip) {
 					hasPublicIPv4 = true
 					break
 				}
 			}
-			if !hasPublicIPv4 && len(bindedIP) != net.IPv6len {
+			if !hasPublicIPv4 {
 				needUpdateAllowedIpList = true
-				sort.Sort(localIPs)
+				sort.Sort(autoAllowedIps)
 				logrus.Debug("Can't find local public ipv4 address. Try detect ip by external request. Local addresses:", localIPs)
 				externalIPs := getIpByExternalRequest()
-				logrus.Debug("IP addresses by external request:", externalIPs)
-				allowedIPs = append(allowedIPs, externalIPs...)
+				for _, ip := range externalIPs {
+					if ip.To4() != nil && hasIpv4 || ip.To4() == nil && hasIpv6 {
+						logrus.Debug("IP add allowed by external request:", ip)
+						autoAllowedIps = append(autoAllowedIps, ip)
+					} else {
+						logrus.Debug("IP skip allowed by external request (ip family):", ip)
+					}
+				}
+
 			}
+
+			sort.Sort(autoAllowedIps)
+			logrus.Debugf("Add auto-allowed ips: %v", autoAllowedIps)
+			allowedIPs = append(allowedIPs, autoAllowedIps...)
 		case net.ParseIP(allowed) != nil:
 			allowedIPs = append(allowedIPs, net.ParseIP(allowed))
 		}

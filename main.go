@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"sync/atomic"
 )
 
 const (
@@ -37,6 +38,7 @@ const (
 	STATE_FILEMODE                         = 0600
 	SERVICE_NAME_EXAMPLE                   = "<service-name>"
 	WORKING_DIR_ARG_NAME                   = "working-dir"
+	DEFAULT_BIND_PORT                      = 443
 )
 
 var (
@@ -45,7 +47,7 @@ var (
 	additionalHeadersParam        = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Several headers separated by comma.")
 	allowIPRefreshInterval        = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often allow ip addresses will be refreshed. Allowable format https://golang.org/pkg/time/#ParseDuration")
 	allowIPsString                = flag.String("allowed-ips", "auto", "allowable ip-addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, it logic can change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to http://ifconfig.io/ip - it need for public ip autodetection behinde nat.")
-	bindTo                        = flag.String("bind-to", ":443", "")
+	bindToS                       = flag.String("bind-to", ":443", "")
 	blockBadDomainDuration        = flag.Duration("block-bad-domain-duration", time.Hour, "Disable try obtain certtificate for domain after error")
 	certDir                       = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
 	certJsonSave                  = flag.Bool("cert-json", false, "Save json info about certificate near the certificate file with same name with .json extension")
@@ -88,6 +90,8 @@ var (
 	nonCertDomainsRegexps     []*regexp.Regexp
 	paramTargetTcpAddr        *net.TCPAddr
 	subdomainPrefixedForUnion []string
+	bindTo                    []net.TCPAddr
+	globalConnectionNumber int64
 )
 
 // constants in var
@@ -216,13 +220,14 @@ func main() {
 		logrus.Info("Start interactive mode")
 
 		// Simple start
-		listener, err := startListener()
-		if listener != nil {
-			acceptConnections(listener)
+		listeners := startListeners()
+		if listeners == nil {
+			logrus.Error("Can't start listener:", err)
+			os.Exit(1)
+		} else {
+			acceptConnections(listeners)
 			return
 		}
-		logrus.Error("Can't start listener:", err)
-		os.Exit(1)
 
 	case "install":
 		err = s.Install()
@@ -280,11 +285,19 @@ func main() {
 
 }
 
-func acceptConnections(listener *net.TCPListener) {
+func acceptConnections(listeners []*net.TCPListener){
+	for _, listener := range listeners{
+		go acceptConnectionsFromAListener(listener)
+	}
+
+	// force lock lifetime - to keep old behaviour
+	var ch chan bool
+	<- ch
+}
+
+func acceptConnectionsFromAListener(listener *net.TCPListener) {
 	started := time.Now().Unix()
-	connectionNum := 0
 	for {
-		connectionNum++
 		tcpConn, err := listener.AcceptTCP()
 		if err != nil || tcpConn == nil {
 			logrus.Warn("Can't accept tcp connection: ", err)
@@ -293,8 +306,9 @@ func acceptConnections(listener *net.TCPListener) {
 			}
 			continue
 		}
-		go func(cn int) {
-			cid := ConnectionID(strconv.FormatInt(started, 10) + "-" + strconv.Itoa(cn))
+		go func() {
+			cn := atomic.AddInt64(&globalConnectionNumber, 1)
+			cid := ConnectionID(strconv.FormatInt(started, 10) + "-" + strconv.FormatInt(cn, 10))
 
 			defer func() {
 				recoveredErr := recover()
@@ -306,7 +320,7 @@ func acceptConnections(listener *net.TCPListener) {
 			}()
 
 			handleTcpConnection(cid, tcpConn)
-		}(connectionNum)
+		}()
 	}
 }
 
@@ -590,8 +604,6 @@ func prepare() {
 		additionalHeaders = append(additionalHeaders, buf.Bytes()...)
 	}
 
-	initAllowedIPs()
-	acmeService = &acmeStruct{}
 	if *inMemoryCertCount > 0 {
 		logrus.Infof("Create memory cache for '%v' certificates", *inMemoryCertCount)
 		certMemCache, err = lru.New(*inMemoryCertCount)
@@ -642,6 +654,41 @@ func prepare() {
 	} else {
 		logrus.Errorf("Can't read state file '%v': %v", *stateFilePath, err)
 	}
+
+	// bindTo
+	for _, addrS := range strings.Split(*bindToS, ",") {
+		addrTcp, err := net.ResolveTCPAddr("tcp", addrS)
+		if err == nil {
+			logrus.Debugf("Parse bind tcp addr '%v' -> '%v'", addrS, addrTcp)
+		} else {
+			addrIp, err := net.ResolveIPAddr("ip", addrS)
+			if addrIp != nil && err == nil {
+				addrTcp = &net.TCPAddr{
+					IP:   addrIp.IP,
+					Port: DEFAULT_BIND_PORT,
+				}
+				logrus.Debugf("Parse bind ip addr '%v' -> '%v'", addrS, addrTcp)
+			} else {
+				logrus.Errorf("Can't parse bind address '%v'", addrS)
+			}
+		}
+		if addrTcp != nil {
+			ipv4 := addrTcp.IP.To4()
+			if ipv4 != nil {
+				addrTcp.IP = ipv4
+			}
+			bindTo = append(bindTo, *addrTcp)
+		}
+	}
+
+	if *bindToS == "" {
+		bindTo = []net.TCPAddr{
+			{IP:net.IPv6unspecified, Port:DEFAULT_BIND_PORT},
+			{IP:net.IPv4zero, Port:DEFAULT_BIND_PORT},
+		}
+	}
+
+	initAllowedIPs()
 
 	acmeService = &acmeStruct{}
 	acmeService.timeToRenew = *timeToRenew
@@ -706,31 +753,24 @@ func saveState(state stateStruct) {
 	}
 }
 
-func startListener() (*net.TCPListener, error) {
+// return nil if can't start any listeners
+func startListeners() ([]*net.TCPListener) {
+	listeners := make([]*net.TCPListener, 0 , len(bindTo))
+	for _, bindAddr := range bindTo {
+		// Start listen
+		logrus.Infof("Start listen: %v", bindAddr)
 
-	// Start listen
-	tcpAddr, err := net.ResolveTCPAddr("tcp", *bindTo)
-	if err != nil {
-		ip := net.ParseIP(*bindTo)
-		if ip != nil {
-			tcpAddr = &net.TCPAddr{
-				IP:ip,
-				Port:443, // default https port
-			}
+		listener, err := net.ListenTCP("tcp", &bindAddr)
+		if err == nil {
+			listeners = append(listeners, listener)
+		} else {
+			logrus.Errorf("Can't start listen on '%v': %v", bindAddr, err)
 		}
 	}
-
-	if tcpAddr == nil {
-		logrus.Panicf("Can't parse bind-to address '%v'", *bindTo)
+	if len(listeners) == 0 {
+		return nil
 	}
-
-	logrus.Infof("Start listen: %v", tcpAddr)
-
-	listener, err := net.ListenTCP("tcp", tcpAddr)
-	if err != nil {
-		logrus.Errorf("Can't start listen on '%v': %v", tcpAddr, err)
-	}
-	return listener, err
+	return listeners
 }
 
 func startTimeLogRotator(logger *lumberjack.Logger) {

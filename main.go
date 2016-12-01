@@ -39,6 +39,7 @@ const (
 	SERVICE_NAME_EXAMPLE                   = "<service-name>"
 	WORKING_DIR_ARG_NAME                   = "working-dir"
 	DEFAULT_BIND_PORT                      = 443
+	DAEMON_KEY_NAME                        = "daemon"
 )
 
 var (
@@ -52,6 +53,8 @@ var (
 	certDir                       = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
 	certJsonSave                  = flag.Bool("cert-json", false, "Save json info about certificate near the certificate file with same name with .json extension")
 	connectionIdHeader            = flag.String("connection-id-header", "", "Header name for send connection id to backend in http proxy mode. Default it isn't send.")
+	daemonFlag                    = flag.Bool(DAEMON_KEY_NAME, false, "Start as background daemon. Supported in unix OS only.")
+	daemonLockFile                = flag.String("daemon-lockfile", "pid.lock", "Lock file for prevent double-start daemon. Work with --daemon only.")
 	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain doesn't available (have zero length). For example client doesn't support SNI. It used for obtain and use certificate only. It isn't forse set header HOST in request.")
 	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind nat.")
 	inMemoryCertCount             = flag.Int("in-memory-cnt", 100, "How many count of certs cache in memory for prevent parse it from file")
@@ -172,6 +175,12 @@ func main() {
 	logrus.Info("Version: ", VERSION)
 
 	prepare()
+
+	if *daemonFlag {
+		if !daemonize(context.TODO()) {
+			return
+		}
+	}
 
 	var serviceArguments []string
 	if *workingDir == "" {

@@ -1,6 +1,7 @@
 *.exe
 
 .idea/
+.vscode/
 lets-proxy.iml
 state.json
 certificates/

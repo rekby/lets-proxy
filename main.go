@@ -77,9 +77,6 @@ var (
 	timeToRenew                   = flag.Duration("time-to-renew", time.Hour*24*30, "Time to end of certificate for background renew.")
 	versionPrint                  = flag.Bool("version", false, "print version and exit.")
 	workingDir                    = flag.String(WORKING_DIR_ARG_NAME, "", "Set working dir")
-
-	// DEPRECATED
-	disableWWWOptimization = flag.Bool("disable-www-optimization", false, "Disable one cert for domain.com and www.domain.com (instead of separate certificates). DEPRECATED. WILL BE DELETED IN NEAR FUTURE. Use subdomain-union instead it.")
 )
 
 var (
@@ -633,10 +630,6 @@ func prepare() {
 	}
 	logrus.Info("Target addr: ", paramTargetTcpAddr)
 
-	//subdomain optimizations
-	if *subdomainsUnionS == "www" && *disableWWWOptimization {
-		*subdomainsUnionS = ""
-	}
 	subdomainPrefixedForUnion = strings.Split(*subdomainsUnionS, ",")
 	for i := range subdomainPrefixedForUnion {
 		subdomainPrefixedForUnion[i] = subdomainPrefixedForUnion[i] + "."

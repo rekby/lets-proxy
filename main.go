@@ -120,10 +120,13 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
+	isDaemon := false
+
 	if *daemonFlag && *serviceAction == "" {
 		if !daemonize(context.TODO()) {
 			return
 		}
+		isDaemon = true
 	} else {
 		if *pidFilePath != "" {
 			ioutil.WriteFile(*pidFilePath, []byte(strconv.Itoa(os.Getpid())), 0600)
@@ -142,10 +145,11 @@ func main() {
 		return
 	}
 
+	isDaemon = isDaemon || !service.Interactive() && runtime.GOOS == "windows"
+
 	logouts := []io.Writer{}
-	if *noLogStderr || // force ignore stderr by flag
-		!service.Interactive() && runtime.GOOS == "windows" { // Run as windows-service
-		// pass
+	if *noLogStderr || isDaemon { // Run as windows-service or unix-daemon
+		// pass - no log to stderr
 	} else {
 		logouts = append(logouts, os.Stderr)
 	}

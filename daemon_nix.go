@@ -15,7 +15,7 @@ func daemonize(ctx context.Context)bool{
 
 	child, err := daemonContext.Reborn()
 	if err != nil {
-		logrus.Fatalf("Can't start daemon process: %v")
+		logrus.Fatalf("Can't start daemon process: %v", err)
 	}
 
 	go func(){

@@ -827,12 +827,14 @@ func containString(slice []string, s string) bool {
 }
 
 func usage() {
-	flag.CommandLine.SetOutput(os.Stderr)
+	flag.CommandLine.SetOutput(os.Stdout)
 
-	fmt.Fprintln(os.Stderr, "Version:", VERSION)
-	fmt.Fprintln(os.Stderr, "Website: https://github.com/rekby/lets-proxy")
-	fmt.Fprintln(os.Stderr, "Developer: timofey@koolin.ru")
-	fmt.Fprintln(os.Stderr)
+	fmt.Println("Version:", VERSION)
+	fmt.Println("Website: https://github.com/rekby/lets-proxy")
+	fmt.Println("Developer: timofey@koolin.ru")
+	fmt.Println()
 
 	flag.PrintDefaults()
+
+	flag.CommandLine.SetOutput(os.Stderr)
 }

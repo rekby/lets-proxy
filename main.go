@@ -66,7 +66,7 @@ var (
 	minTLSVersion                 = flag.String("min-tls", "", "Minimul supported tls version: ssl3,tls10,tls11,tls12. Default is golang's default.")
 	noLogStderr                   = flag.Bool("no-log-stderr", false, "supress log to stderr")
 	nonCertDomains                = flag.String("non-cert-domains", "", "No obtain certificate for mathed domains. Regexpes separated by comma.")
-	pidFilePath                   = flag.String("pidfile", "lets-proxy.pid", "Write pid of process. When used --daemon - lock the file for prevent double-start daemon.")
+	pidFilePath                   = flag.String("pid-file", "lets-proxy.pid", "Write pid of process. When used --daemon - lock the file for prevent double-start daemon.")
 	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
 	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
 	serviceAction                 = flag.String("service-action", "", "start,stop,install,uninstall,reinstall")
@@ -123,6 +123,10 @@ func main() {
 	if *daemonFlag && *serviceAction == "" {
 		if !daemonize(context.TODO()) {
 			return
+		}
+	} else {
+		if *pidFilePath != "" {
+			ioutil.WriteFile(*pidFilePath, []byte(strconv.Itoa(os.Getpid())), 0600)
 		}
 	}
 

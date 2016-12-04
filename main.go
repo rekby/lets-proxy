@@ -24,8 +24,8 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
-	"time"
 	"sync/atomic"
+	"time"
 )
 
 const (
@@ -74,6 +74,7 @@ var (
 	stateFilePath                 = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
 	subdomainsUnionS              = flag.String("subdomains-union", "www", "Comma-separated subdomains which try to obtain certificates with common domain name. For example if received request to domain.com it try obtain certificate for www.domain.com and domain.com same time and save them in one cert - as domain.com. Change option on working copy of program will need to obtain new certificates while request to added/removed subdomains.")
 	targetConnString              = flag.String("target", ":80", "IP, :port or IP:port. Default port is 80. Default IP - same which receive connection.")
+	mapTargetS                    = flag.String("target-map", "", "Remap target for some received ip:port. It write if from receiveIP[:receivePort]=targetIP[:targetPort]. It ca comtains few map,separated by comma. Example: --map=1.2.3.10=127.0.0.1,1.2.3.11=127.0.0.2:8999")
 	targetConnTimeout             = flag.Duration("target-conn-timeout", time.Second, "")
 	tcpKeepAliveInterval          = flag.Duration("tcp-keepalive-interval", time.Minute, "Interval between send tcp keepalive packages detect dead connections")
 	acmeTestServer                = flag.Bool("test", false, "Use test lets encrypt server instead of <acme-server>")
@@ -92,6 +93,7 @@ var (
 	subdomainPrefixedForUnion []string
 	bindTo                    []net.TCPAddr
 	globalConnectionNumber    int64
+	targetMap                 map[string]*net.TCPAddr
 )
 
 // constants in var
@@ -482,20 +484,36 @@ forRegexpCheckDomain:
 	return cert, err
 }
 
-func getTargetAddr(in *net.TCPConn) (net.TCPAddr, error) {
+func getTargetAddr(cid ConnectionID, in *net.TCPConn) (net.TCPAddr, error) {
 	var target net.TCPAddr
-	if paramTargetTcpAddr.IP == nil || paramTargetTcpAddr.IP.IsUnspecified() {
+
+	var mappedTarget *net.TCPAddr
+	if targetMap != nil {
+		mappedTarget = targetMap[in.LocalAddr().String()]
+	}
+	if mappedTarget == nil {
+		target = *paramTargetTcpAddr
+	} else {
+		target = *mappedTarget
+		logrus.Debugf("Select target address by target map (cid %v) '%v' -> '%v'", cid, in.LocalAddr(), target)
+	}
+
+	if target.IP == nil || target.IP.IsUnspecified() {
 		receiveAddr, ok := in.LocalAddr().(*net.TCPAddr)
 		if !ok {
 			logrus.Errorf("Can't cast incoming addr to tcp addr: '%v'", in.LocalAddr())
 			return net.TCPAddr{}, errors.New("Can't cast incoming addr to tcp addr")
 		}
 		target.IP = receiveAddr.IP
-		target.Port = paramTargetTcpAddr.Port
 	} else {
 		target.IP = paramTargetTcpAddr.IP
+	}
+
+	if target.Port == 0 {
 		target.Port = paramTargetTcpAddr.Port
 	}
+
+	logrus.Debugf("Target address for '%v' (cid '%v'): %v", in.RemoteAddr(), cid, target)
 	return target, nil
 }
 
@@ -505,7 +523,7 @@ func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
 	in.SetKeepAlive(true)
 	in.SetKeepAlivePeriod(*tcpKeepAliveInterval)
 
-	target, err := getTargetAddr(in)
+	target, err := getTargetAddr(cid, in)
 	if err != nil {
 		logrus.Errorf("Can't get target IP/port for '%v' (cid '%v'): %v", in.RemoteAddr(), cid, err)
 		return
@@ -698,7 +716,44 @@ func prepare() {
 		}
 	}
 
+	if len(bindTo) == 0 {
+		logrus.Fatal("Nothing address to bind")
+	}
+
 	initAllowedIPs()
+
+	// targetMap
+	if *mapTargetS != "" {
+		targetMap = make(map[string]*net.TCPAddr, strings.Count(*mapTargetS, ",")+1)
+		for _, m := range strings.Split(*mapTargetS, ",") {
+			equalIndex := strings.Index(m, "=")
+			if equalIndex < 0 {
+				logrus.Errorf("Error in target-maps, doesn't contain equal sign: %v", m)
+				continue
+			}
+
+			receiver := resolveAddr(m[:equalIndex])
+			if receiver.IP == nil || receiver.IP.IsUnspecified() {
+				logrus.Errorf("In map targets receiver must have IP part, but it can't parsed for IP: %v", m)
+				continue
+			}
+			if receiver.Port == 0 {
+				receiver.Port = bindTo[0].Port
+			}
+
+			target := resolveAddr(m[equalIndex+1:])
+			if target.Port == 0 {
+				target.Port = paramTargetTcpAddr.Port
+			}
+			targetMap[receiver.String()] = target
+		}
+	}
+	if logrus.GetLevel() >= logrus.InfoLevel {
+		for k, v := range targetMap {
+			logrus.Printf("Map target '%v' -> '%v'", k, v)
+		}
+	}
+
 
 	acmeService = &acmeStruct{}
 	acmeService.timeToRenew = *timeToRenew
@@ -824,6 +879,25 @@ func containString(slice []string, s string) bool {
 		}
 	}
 	return false
+}
+
+func resolveAddr(s string)*net.TCPAddr {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", s)
+	if err != nil {
+		ipAddr, err := net.ResolveIPAddr("ip", s)
+		if err != nil {
+			logrus.Debugf("Can't resolce address: %v", s)
+			return nil
+		}
+		tcpAddr = &net.TCPAddr{
+			IP:ipAddr.IP,
+		}
+	}
+
+	if tcpAddr.IP.To4() != nil {
+		tcpAddr.IP = tcpAddr.IP.To4()
+	}
+	return tcpAddr
 }
 
 func usage() {

@@ -64,5 +64,6 @@ Used libraries (alphabet ordered):
 * http://github.com/hlandau/acme/acmeapi - used for work with lets encrypt
 * http://github.com/kardianos/service - working as service, especially for windows.
 * http://github.com/miekg/dns - direct dns requests
+* http://github.com/sevlyar/go-daemon - unix daemonize
 * http://github.com/Sirupsen/logrus - logging
 * http://gopkg.in/natefinch/lumberjack.v2 - log rotate

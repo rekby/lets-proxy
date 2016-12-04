@@ -39,6 +39,7 @@ const (
 	SERVICE_NAME_EXAMPLE                   = "<service-name>"
 	WORKING_DIR_ARG_NAME                   = "working-dir"
 	DEFAULT_BIND_PORT                      = 443
+	DAEMON_KEY_NAME                        = "daemon"
 )
 
 var (
@@ -52,6 +53,7 @@ var (
 	certDir                       = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
 	certJsonSave                  = flag.Bool("cert-json", false, "Save json info about certificate near the certificate file with same name with .json extension")
 	connectionIdHeader            = flag.String("connection-id-header", "", "Header name for send connection id to backend in http proxy mode. Default it isn't send.")
+	daemonFlag                    = flag.Bool(DAEMON_KEY_NAME, false, "Start as background daemon. Supported in unix OS only.")
 	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain doesn't available (have zero length). For example client doesn't support SNI. It used for obtain and use certificate only. It isn't forse set header HOST in request.")
 	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind nat.")
 	inMemoryCertCount             = flag.Int("in-memory-cnt", 100, "How many count of certs cache in memory for prevent parse it from file")
@@ -64,6 +66,7 @@ var (
 	minTLSVersion                 = flag.String("min-tls", "", "Minimul supported tls version: ssl3,tls10,tls11,tls12. Default is golang's default.")
 	noLogStderr                   = flag.Bool("no-log-stderr", false, "supress log to stderr")
 	nonCertDomains                = flag.String("non-cert-domains", "", "No obtain certificate for mathed domains. Regexpes separated by comma.")
+	pidFilePath                   = flag.String("pid-file", "lets-proxy.pid", "Write pid of process. When used --daemon - lock the file for prevent double-start daemon.")
 	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
 	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
 	serviceAction                 = flag.String("service-action", "", "start,stop,install,uninstall,reinstall")
@@ -88,7 +91,7 @@ var (
 	paramTargetTcpAddr        *net.TCPAddr
 	subdomainPrefixedForUnion []string
 	bindTo                    []net.TCPAddr
-	globalConnectionNumber int64
+	globalConnectionNumber    int64
 )
 
 // constants in var
@@ -117,6 +120,19 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
+	isDaemon := false
+
+	if *daemonFlag && *serviceAction == "" {
+		if !daemonize(context.TODO()) {
+			return
+		}
+		isDaemon = true
+	} else {
+		if *pidFilePath != "" {
+			ioutil.WriteFile(*pidFilePath, []byte(strconv.Itoa(os.Getpid())), 0600)
+		}
+	}
+
 	if *workingDir != "" {
 		err := os.Chdir(*workingDir)
 		if err != nil {
@@ -129,10 +145,11 @@ func main() {
 		return
 	}
 
+	isDaemon = isDaemon || !service.Interactive() && runtime.GOOS == "windows"
+
 	logouts := []io.Writer{}
-	if *noLogStderr || // force ignore stderr by flag
-		!service.Interactive() && runtime.GOOS == "windows" { // Run as windows-service
-		// pass
+	if *noLogStderr || isDaemon { // Run as windows-service or unix-daemon
+		// pass - no log to stderr
 	} else {
 		logouts = append(logouts, os.Stderr)
 	}
@@ -282,14 +299,14 @@ func main() {
 
 }
 
-func acceptConnections(listeners []*net.TCPListener){
-	for _, listener := range listeners{
+func acceptConnections(listeners []*net.TCPListener) {
+	for _, listener := range listeners {
 		go acceptConnectionsFromAListener(listener)
 	}
 
 	// force lock lifetime - to keep old behaviour
 	var ch chan bool
-	<- ch
+	<-ch
 }
 
 func acceptConnectionsFromAListener(listener *net.TCPListener) {
@@ -676,8 +693,8 @@ func prepare() {
 
 	if *bindToS == "" {
 		bindTo = []net.TCPAddr{
-			{IP:net.IPv6unspecified, Port:DEFAULT_BIND_PORT},
-			{IP:net.IPv4zero, Port:DEFAULT_BIND_PORT},
+			{IP: net.IPv6unspecified, Port: DEFAULT_BIND_PORT},
+			{IP: net.IPv4zero, Port: DEFAULT_BIND_PORT},
 		}
 	}
 
@@ -747,8 +764,8 @@ func saveState(state stateStruct) {
 }
 
 // return nil if can't start any listeners
-func startListeners() ([]*net.TCPListener) {
-	listeners := make([]*net.TCPListener, 0 , len(bindTo))
+func startListeners() []*net.TCPListener {
+	listeners := make([]*net.TCPListener, 0, len(bindTo))
 	for _, bindAddr := range bindTo {
 		// Start listen
 		logrus.Infof("Start listen: %v", bindAddr)

@@ -69,6 +69,7 @@ var (
 	pidFilePath                   = flag.String("pid-file", "lets-proxy.pid", "Write pid of process. When used --daemon - lock the file for prevent double-start daemon.")
 	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
 	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
+	runAs                         = flag.String("runas", "", "Run as other user. It work only for --daemon, only for unix and require to run from specified user or root. It can be user login or user id. It change default work dir to home folder of the user (can be changed by explicit --" + WORKING_DIR_ARG_NAME + "). Run will fail if use the option without --daemon.")
 	serviceAction                 = flag.String("service-action", "", "start,stop,install,uninstall,reinstall")
 	serviceName                   = flag.String("service-name", SERVICE_NAME_EXAMPLE, "service name, need for service actions")
 	stateFilePath                 = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
@@ -122,10 +123,27 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
+	// Set loglevel
+	logrus.SetLevel(logrus.WarnLevel)
+	switch *logLevel {
+	case "fatal":
+		logrus.SetLevel(logrus.FatalLevel)
+	case "error":
+		logrus.SetLevel(logrus.ErrorLevel)
+	case "warning":
+		logrus.SetLevel(logrus.WarnLevel)
+	case "info":
+		logrus.SetLevel(logrus.InfoLevel)
+	case "debug":
+		logrus.SetLevel(logrus.DebugLevel)
+	default:
+		logrus.Errorf("Use default loglevel '%v', becouse unknow level: '%v'", logrus.GetLevel(), *logLevel)
+	}
+
 	isDaemon := false
 
 	if *daemonFlag && *serviceAction == "" {
-		if !daemonize(context.TODO()) {
+		if !daemonize() {
 			return
 		}
 		isDaemon = true
@@ -188,7 +206,12 @@ func main() {
 		logrus.SetOutput(io.MultiWriter(logouts...))
 	}
 
+	logrus.Infof("Use log level: '%v'", logrus.GetLevel())
 	logrus.Info("Version: ", VERSION)
+
+	if *runAs != "" && !*daemonFlag {
+		logrus.Fatal("Key --runas used without --daemon key. It isn't supported.")
+	}
 
 	prepare()
 
@@ -570,23 +593,6 @@ func prepare() {
 	var err error
 
 	// Init
-	logrus.SetLevel(logrus.WarnLevel)
-	switch *logLevel {
-	case "fatal":
-		logrus.SetLevel(logrus.FatalLevel)
-	case "error":
-		logrus.SetLevel(logrus.ErrorLevel)
-	case "warning":
-		logrus.SetLevel(logrus.WarnLevel)
-	case "info":
-		logrus.SetLevel(logrus.InfoLevel)
-	case "debug":
-		logrus.SetLevel(logrus.DebugLevel)
-	default:
-		logrus.Errorf("Use default loglevel '%v', becouse unknow level: '%v'", logrus.GetLevel(), *logLevel)
-	}
-	logrus.Infof("Use log level: '%v'", logrus.GetLevel())
-
 	if *proxyMode != "http" && *proxyMode != "tcp" {
 		logrus.Panicf("Unknow proxy mode: %v", *proxyMode)
 	}
@@ -754,7 +760,6 @@ func prepare() {
 		}
 	}
 
-
 	acmeService = &acmeStruct{}
 	acmeService.timeToRenew = *timeToRenew
 	if *acmeTestServer {
@@ -881,7 +886,7 @@ func containString(slice []string, s string) bool {
 	return false
 }
 
-func resolveAddr(s string)*net.TCPAddr {
+func resolveAddr(s string) *net.TCPAddr {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", s)
 	if err != nil {
 		ipAddr, err := net.ResolveIPAddr("ip", s)
@@ -890,7 +895,7 @@ func resolveAddr(s string)*net.TCPAddr {
 			return nil
 		}
 		tcpAddr = &net.TCPAddr{
-			IP:ipAddr.IP,
+			IP: ipAddr.IP,
 		}
 	}
 

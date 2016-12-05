@@ -5,7 +5,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"errors"
 	"github.com/Sirupsen/logrus"
 	"github.com/sevlyar/go-daemon"
@@ -22,7 +21,7 @@ type User struct {
 }
 
 // return true if it is child process
-func daemonize(ctx context.Context) bool {
+func daemonize() bool {
 
 	daemonContext := &daemon.Context{}
 	daemonContext.PidFileName = *pidFilePath
@@ -49,11 +48,6 @@ func daemonize(ctx context.Context) bool {
 	if err != nil {
 		logrus.Fatalf("Can't start daemon process: %v", err)
 	}
-
-	go func() {
-		<-ctx.Done()
-		daemonContext.Release()
-	}()
 
 	if child == nil {
 		logrus.Info("Start as daemon child")

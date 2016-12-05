@@ -143,7 +143,7 @@ func main() {
 	isDaemon := false
 
 	if *daemonFlag && *serviceAction == "" {
-		if !daemonize(context.TODO()) {
+		if !daemonize() {
 			return
 		}
 		isDaemon = true

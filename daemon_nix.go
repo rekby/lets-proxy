@@ -38,11 +38,13 @@ func daemonize() bool {
 			Uid: user.UserId,
 			Gid: user.DefaultGroupId,
 		}
+		daemonContext.WorkDir = user.HomeDir
 	}
 
 	if *workingDir != "" {
 		daemonContext.WorkDir = *workingDir
 	}
+	logrus.Infof("Daemon working dir: %v", daemonContext.WorkDir)
 
 	if *pidFilePath != "" {
 		pidPath := *pidFilePath
@@ -50,6 +52,7 @@ func daemonize() bool {
 			pidPath = filepath.Join(daemonContext.WorkDir, pidPath)
 		}
 		daemonContext.PidFileName = pidPath
+		logrus.Infof("Pidfile: %v", daemonContext.PidFileName)
 	}
 
 	child, err := daemonContext.Reborn()

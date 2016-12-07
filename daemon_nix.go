@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"syscall"
+	"path/filepath"
 )
 
 type User struct {
@@ -24,7 +25,6 @@ type User struct {
 func daemonize() bool {
 
 	daemonContext := &daemon.Context{}
-	daemonContext.PidFileName = *pidFilePath
 
 	if *runAs != "" {
 		userName := *runAs
@@ -42,6 +42,14 @@ func daemonize() bool {
 
 	if *workingDir != "" {
 		daemonContext.WorkDir = *workingDir
+	}
+
+	if *pidFilePath != "" {
+		pidPath := *pidFilePath
+		if !filepath.IsAbs(pidPath) && daemonContext.WorkDir != "" {
+			pidPath = filepath.Join(daemonContext.WorkDir, pidPath)
+		}
+		daemonContext.PidFileName = pidPath
 	}
 
 	child, err := daemonContext.Reborn()

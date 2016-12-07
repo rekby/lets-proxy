@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"path/filepath"
 )
 
 const (
@@ -154,6 +155,10 @@ func main() {
 	}
 
 	if *workingDir != "" {
+		if !filepath.IsAbs(*workingDir) {
+			logrus.Fatalf("Working dir must be absolute filepath instead relative: '%v'", *workingDir)
+		}
+
 		err := os.Chdir(*workingDir)
 		if err != nil {
 			logrus.Error("Can't change working dir: ", err)

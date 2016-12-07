@@ -83,7 +83,7 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 		logrus.Debugf("Skip certificateCachePut becouse certDir is empty")
 		return
 	}
-	err := os.MkdirAll(*certDir, 0600)
+	err := os.MkdirAll(*certDir, 0700)
 	if err != nil {
 		logrus.Errorf("Can't create dir for save cached cert '%v':%v", *certDir, err)
 		return

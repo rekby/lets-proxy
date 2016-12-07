@@ -65,6 +65,23 @@ func daemonize() bool {
 
 	if child == nil {
 		logrus.Info("Start as daemon child")
+
+		if *runAs != "" && os.Getuid() == 0 {
+			logrus.Fatal("Start with uid 0 instead runas")
+			logFilePath := *logOutput
+			if logFilePath == "" {
+				logFilePath = "FATAL_ERROR.txt"
+			}
+			if !filepath.IsAbs(logFilePath) && daemonContext.WorkDir != "" {
+				logFilePath = filepath.Join(daemonContext.WorkDir, logFilePath)
+			}
+			logFile, _ := os.OpenFile(logFilePath, os.O_CREATE | os.O_WRONLY | os.O_APPEND, DEFAULT_FILE_MODE)
+			if logFile != nil {
+				logFile.WriteString("Start with uid 0 instead runas\n")
+				logFile.Close()
+			}
+		}
+
 		return true
 	} else {
 		logrus.Info("Start as daemons parent")

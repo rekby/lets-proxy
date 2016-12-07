@@ -2,11 +2,17 @@
 
 English description
 ===================
-Reverse-proxy server to handle https-requests. Requires existing http-server at the same server. By default `lets-proxy` handles
+Reverse-proxy server to handle https-requests transparent. By default `lets-proxy` handles
 https requests to port 443 and proxies them as http to port 80 with same IP. It adds http header: X-Real-IP with ip address
-of remote client and X-Forwarded-Proto=https - for https detection.
+of remote client and X-Forwarded-Proto=https - for https detection. It obtain valid certificates from lets encrypt and
+handle https free, automated and without warning in browsers.
 
 It has tcp mode, that doesn't parse traffic and proxy it as usual tcp-connection without modify.
+
+The program created for shared hosting and can handle many thouthands domain per server.
+From other side - it simple and doesn't need settings to start program on personal server/vps.
+
+Quick start:
 
     ./lets-proxy or lets-proxy.exe
     
@@ -29,13 +35,17 @@ Use --help key for details:
 Русский (Russian):
 ==================
 
-Реверс-прокси сервер для обработки https-запросов. Для начала использования достаточно просто запустить его на сервере с 
+Реверс-прокси сервер для прозрачной обработки https-запросов. Для начала использования достаточно просто запустить его на сервере с 
 запущенным http-сервером. При этом lets-proxy начнёт слушать порт 433 и передавать запросы на порт 80 с тем же IP-адресом.
 К запросу будут добавляться заголовки X-Real-IP с IP-адресом источника запроса и X-Forwarded-Proto=https - для определения
-что запрос пришел по https.
+что запрос пришел по https. Сертификаты для работы https получаются в реальном времени от letsencrypt.org. Это правильные
+(не самоподписанные) бесплатные сертификаты, которым браузеры доверяют.
 
 Есть режим tcp-прокси, в этом случае входящий трафик никак не анализируется и не меняется, а просто передается на указанный порт, но
 уже в расшифрованном виде.
+
+Программа разрабатывается для использования на виртуальном хостинге и может работать с тысячами доменов на каждом сервере.
+С другой стороны она проста и не требует начальных настроек для запуска на персональном сервере.
 
 Быстрый старт:
 

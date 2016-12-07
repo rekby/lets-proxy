@@ -21,10 +21,13 @@ type User struct {
 	DefaultGroupId uint32
 }
 
+var (
+	daemonContext *daemon.Context // need global var for prevent close (and unlock) pid-file
+)
 // return true if it is child process
 func daemonize() bool {
 
-	daemonContext := &daemon.Context{}
+	daemonContext = &daemon.Context{}
 
 	if *runAs != "" {
 		userName := *runAs

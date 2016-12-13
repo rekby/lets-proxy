@@ -17,7 +17,8 @@ import (
 
 var (
 	certMemCache      *lru.Cache
-	DEFAULT_FILE_MODE os.FileMode = 0666
+	DEFAULT_FILE_MODE os.FileMode = 0644
+	PRIVATE_KEY_FILEMODE os.FileMode = 0600
 )
 
 // Must return valid certificate with non nil cert.Leaf or return nil
@@ -93,7 +94,7 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 	certPath := filepath.Join(*certDir, domain+".crt")
 	jsonPath := filepath.Join(*certDir, domain+".json")
 
-	keyFile, err := os.Create(keyPath)
+	keyFile, err := os.OpenFile(keyPath, os.O_CREATE | os.O_WRONLY | os.O_TRUNC, PRIVATE_KEY_FILEMODE)
 	if keyFile != nil {
 		defer keyFile.Close()
 	}
@@ -125,7 +126,7 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 		}
 	}
 
-	certFile, err := os.Create(certPath)
+	certFile, err := os.OpenFile(certPath, os.O_CREATE | os.O_WRONLY | os.O_TRUNC, DEFAULT_FILE_MODE)
 	if certFile != nil {
 		defer certFile.Close()
 	}

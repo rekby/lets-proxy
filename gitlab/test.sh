@@ -116,7 +116,6 @@ restart_proxy
 
 echo "Check PID"
 flush_cache
-flush_cache
 
 TEST=`curl -vsk https://${TMP_DOMAIN}`
 

@@ -75,13 +75,16 @@ function delete_domain(){
 
 go build -o proxy github.com/rekby/lets-proxy
 
-echo "Start proxy interactive - for view full log"
+function restart_proxy(){
+    PID=`cat lets-proxy.pid`
+    if [ -n "$PID" ]; then
+        kill -9 "$PID"
+    fi
+    ./proxy --test --logout=log.txt --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https --connection-id-header=Connection-ID --cert-json --daemon --pid-file=lets-proxy.pid
+    sleep 3 # Allow to start, generate keys, etc.
+}
 
-./proxy --test --logout=log.txt --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https --connection-id-header=Connection-ID --cert-json --daemon --pid-file=lets-proxy.pid
-#./proxy &  ## REAL CERT. WARNING - LIMITED CERT REQUEST
-
-sleep 10 # Allow to start, generate keys, etc.
-
+restart_proxy
 TEST=`curl -vsk https://${TMP_DOMAIN}`
 
 echo "${TEST}"

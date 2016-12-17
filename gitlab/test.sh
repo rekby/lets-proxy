@@ -73,6 +73,13 @@ function delete_domain(){
     ./ypdd $DOMAIN del $ID
 }
 
+function exit_error(){
+    delete_domain
+    cat log.txt
+    exit 1
+}
+
+
 go build -o proxy github.com/rekby/lets-proxy
 
 function restart_proxy(){
@@ -107,8 +114,7 @@ function test_or_exit(){
         return
     else
         echo "${NAME}-FAIL"
-        delete_domain
-        exit 1
+        exit_error
     fi
 
 }
@@ -132,8 +138,7 @@ else
     echo
     echo certificates/${TMP_DOMAIN}.key
     cat certificates/${TMP_DOMAIN}.key
-    delete_domain
-    exit 1
+    exit_error
 fi
 
 echo "Test install proxy"
@@ -157,8 +162,7 @@ curl -k https://${TMP_DOMAIN2} >/dev/null 2>&1 # Wait answer
 CERTS_OBTAINED=`cat log.txt | grep "BEGIN CERTIFICATE" | wc -l`
 if [ "${CERTS_OBTAINED}" != "1" ]; then
     echo "Must be only one cert obtained. But obtained: ${CERTS_OBTAINED}"
-    delete_domain
-    exit 1
+    exit_error
 fi
 echo "Obtain only one cert for a domain same time - OK"
 sleep 3 # For more readable logs
@@ -170,8 +174,7 @@ test_or_exit "HOST" "HOST: ${TMP_WWWDOMAIN2}"
 # Have metadata
 cat certificates/${TMP_DOMAIN2}.json
 if ! ( grep -q ${TMP_WWWDOMAIN2} certificates/${TMP_DOMAIN2}.json && grep -q ${TMP_WWWDOMAIN2} certificates/${TMP_DOMAIN2}.json ); then
-    delete_domain
-    exit 1
+    exit_error
 fi
 
 echo
@@ -184,8 +187,7 @@ if ! [ -e certificates/${TMP_DOMAIN3WWWONLY_WITHOUT_WWW}.crt ] || ! grep -q ${TM
     echo
     cat certificates/${TMP_DOMAIN3WWWONLY_WITHOUT_WWW}.json
 
-    delete_domain
-    exit 1
+    exit_error
 fi
 
 echo
@@ -204,8 +206,7 @@ if [ -n "${TEST}" ]; then
     echo "Obtain cert for locked domain"
     echo "${TEST}"
 
-    delete_domain
-    exit 1
+    exit_error
 fi
 
 delete_domain

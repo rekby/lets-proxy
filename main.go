@@ -143,14 +143,16 @@ func main() {
 
 	isDaemon := false
 
-	if *daemonFlag && *serviceAction == "" {
-		if !daemonize() {
-			return
-		}
-		isDaemon = true
-	} else {
-		if *pidFilePath != "" {
-			ioutil.WriteFile(*pidFilePath, []byte(strconv.Itoa(os.Getpid())), 0600)
+	if *serviceAction == "" {
+		if *daemonFlag {
+			if !daemonize() {
+				return
+			}
+			isDaemon = true
+		} else {
+			if *pidFilePath != "" {
+				ioutil.WriteFile(*pidFilePath, []byte(strconv.Itoa(os.Getpid())), 0600)
+			}
 		}
 	}
 

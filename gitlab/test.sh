@@ -74,7 +74,10 @@ function delete_domain(){
 }
 
 function exit_error(){
+    echo "DELETE TMP DOMAINS"
     delete_domain
+
+    echo "LOG"
     cat log.txt
     exit 1
 }
@@ -205,6 +208,9 @@ TEST=`curl -sk https://${TMP_DOMAIN}` # must be empty becouse lets-proxy must re
 if [ -n "${TEST}" ]; then
     echo "Obtain cert for locked domain"
     echo "${TEST}"
+
+    echo
+    ls -la certificates/
 
     exit_error
 fi

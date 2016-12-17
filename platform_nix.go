@@ -23,7 +23,9 @@ type User struct {
 
 var (
 	daemonContext *daemon.Context // need global var for prevent close (and unlock) pid-file
+	osSignals = make(chan os.Signal, 1)
 )
+
 // return true if it is child process
 func daemonize() bool {
 
@@ -161,5 +163,16 @@ func parseUint32(s string) (uint32, error) {
 		return uint32(res), nil
 	} else {
 		return 0, err
+	}
+}
+
+
+func signalWorker(){
+	for s := range osSignals {
+		switch s {
+		case syscall.SIGHUP:
+			certMemCache.Purge()
+			skipDomainsFlush()
+		}
 	}
 }

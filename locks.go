@@ -10,8 +10,8 @@ var (
 	certDomainsObtaining      = make(map[string]bool)
 	certDomainsObtainingMutex = &sync.Mutex{}
 
-	badDomainMap      = make(map[string]time.Time)
-	badDomainMapMutex = &sync.Mutex{}
+	skipDomainMap = make(map[string]time.Time)
+	skipDomainMapMutex = &sync.Mutex{}
 )
 
 /*
@@ -57,44 +57,50 @@ func obtainDomainsUnlock(domains []string) {
 }
 
 func badDomainsAdd(domains []string) {
-	badDomainMapMutex.Lock()
-	defer badDomainMapMutex.Unlock()
+	skipDomainMapMutex.Lock()
+	defer skipDomainMapMutex.Unlock()
 
 	deadline := time.Now().Add(*blockBadDomainDuration)
 	for _, domain := range domains {
-		badDomainMap[domain] = deadline
+		skipDomainMap[domain] = deadline
 	}
 	logrus.Debugf("Add domains to block '%v', dedline: '%v'", domains, deadline)
 }
 
 // if no domains blocked - return nil
 func badDomainsGetBad(domains []string) (res []string) {
-	badDomainMapMutex.Lock()
-	defer badDomainMapMutex.Unlock()
+	skipDomainMapMutex.Lock()
+	defer skipDomainMapMutex.Unlock()
 
 	now := time.Now()
 	for _, domain := range domains {
-		if deadline, ok := badDomainMap[domain]; ok && now.Before(deadline) {
+		if deadline, ok := skipDomainMap[domain]; ok && now.Before(deadline) {
 			res = append(res, domain)
 		}
 	}
 	return res
 }
 
+func skipDomainsFlush(){
+	skipDomainMapMutex.Lock()
+	skipDomainMap = make(map[string]time.Time)
+	skipDomainMapMutex.Unlock()
+}
+
 func badDomainsStartCleaner() {
-	badDomainMapMutex.Lock()
-	defer badDomainMapMutex.Unlock()
+	skipDomainMapMutex.Lock()
+	defer skipDomainMapMutex.Unlock()
 
 	now := time.Now()
-	toClean := make([]string, 0, len(badDomainMap))
-	for domain, deadline := range badDomainMap {
+	toClean := make([]string, 0, len(skipDomainMap))
+	for domain, deadline := range skipDomainMap {
 		if deadline.Before(now) {
 			toClean = append(toClean, domain)
 		}
 	}
 
 	for _, domain := range toClean {
-		delete(badDomainMap, domain)
+		delete(skipDomainMap, domain)
 	}
 
 	logrus.Debugf("Clean blocked domains list, remove domains: '%v'", toClean)

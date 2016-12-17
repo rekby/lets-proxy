@@ -219,6 +219,7 @@ func main() {
 	}
 
 	prepare()
+	go signalWorker()
 
 	var serviceArguments []string
 	if *workingDir == "" {

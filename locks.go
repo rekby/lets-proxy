@@ -81,6 +81,12 @@ func skipDomainsCheck(domains []string) bool {
 	return false
 }
 
+func skipDomainsFlush(){
+	skipDomainMapMutex.Lock()
+	skipDomainMap = make(map[string]time.Time)
+	skipDomainMapMutex.Unlock()
+}
+
 func skipDomainsStartCleaner() {
 	skipDomainMapMutex.Lock()
 	defer skipDomainMapMutex.Unlock()

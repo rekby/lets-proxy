@@ -962,6 +962,9 @@ For any of domains in <subdomains-union> - check base domain (not subdomain). Fo
 file 'domain.com.lock' will lock 'domain.com' and 'www.domain.com' and file 'www.domain.com.lock' will not work for
 domain 'www.domain.com'.
 
+Flush caches:
+Lets-proxy flush cache by SIGHUP signal (*nix systems), for flush cache without restart the proxy you can:
+   kill -SIGHUP <lets-proxy-pid> or killall -SIGHUP lets-proxy
 `)
 
 	flag.CommandLine.SetOutput(os.Stderr)

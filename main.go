@@ -426,6 +426,8 @@ checkCertInCache:
 					// TODO: additional check to exiting certs for avoid overwrite and clean by regexp
 					if obtainDomainsLock(domainsToObtain) {
 						defer obtainDomainsUnlock(domainsToObtain)
+					} else {
+						return
 					}
 
 					cert, err := acmeService.CreateCertificate(ctx, domainsToObtain, "")

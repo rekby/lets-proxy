@@ -95,13 +95,28 @@ function restart_proxy(){
 }
 
 function flush_cache(){
-    PID=`cat lets-proxy.pid`
+    PIDFILE="lets-proxy.pid"
+    PID=`cat ${PIDFILE}`
     if [ -n "$PID" ]; then
-        kill -SIGHUP "$PID"
+        if ! kill -SIGHUP "$PID"; then
+            echo "PID FAILED"
+            echo "PIDFILE: ${PIDFILE}"
+            echo "PID: ${PID}"
+
+            echo "Process list"
+            ps aux
+
+            exit_error
+        fi
     fi
     sleep 1
+
 }
 restart_proxy
+
+echo "Check PID"
+flush_cache
+
 TEST=`curl -vsk https://${TMP_DOMAIN}`
 
 echo "${TEST}"

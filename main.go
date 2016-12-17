@@ -419,8 +419,13 @@ checkCertInCache:
 
 		switch {
 		case cert != nil && cert.Leaf.NotAfter.Before(now):
-			// pass to obtain cert
-			logrus.Warnf("Expired certificate got from cache for domain '%v'", domain)
+			if isBaseDomainLocked(baseDomain) {
+				logrus.Infof("Expired certificate got from cache for domain '%v'. It is locked domain. Use expired cert.", domain)
+				return cert, nil
+			} else {
+				logrus.Infof("Expired certificate got from cache for domain '%v'. Obtain new cert.", domain)
+				// pass to obtain new certificate
+			}
 
 		case cert != nil:
 			// need for background cert renew

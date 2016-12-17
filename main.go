@@ -126,6 +126,7 @@ func main() {
 
 	// Set loglevel
 	logrus.SetLevel(logrus.WarnLevel)
+	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp:true})
 	switch *logLevel {
 	case "fatal":
 		logrus.SetLevel(logrus.FatalLevel)
@@ -212,6 +213,7 @@ func main() {
 	default:
 		logrus.SetOutput(io.MultiWriter(logouts...))
 	}
+
 
 	logrus.Infof("Use log level: '%v'", logrus.GetLevel())
 	logrus.Info("Version: ", VERSION)

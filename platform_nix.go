@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"syscall"
 	"path/filepath"
+	"os/signal"
 )
 
 type User struct {
@@ -168,6 +169,8 @@ func parseUint32(s string) (uint32, error) {
 
 
 func signalWorker(){
+	signal.Notify(osSignals, syscall.SIGHUP)
+
 	for s := range osSignals {
 		switch s {
 		case syscall.SIGHUP:

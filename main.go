@@ -33,7 +33,6 @@ const (
 	LETSENCRYPT_CREATE_CERTIFICATE_TIMEOUT = time.Minute
 	LETSENCRYPT_PRODUCTION_API_URL         = "https://acme-v01.api.letsencrypt.org/directory"
 	LETSENCRYPT_STAGING_API_URL            = "https://acme-staging.api.letsencrypt.org/directory"
-	PRIVATE_KEY_BITS                       = 2048
 	TRY_COUNT                              = 10
 	RETRY_SLEEP                            = time.Second * 5
 	STATE_FILEMODE                         = 0600
@@ -69,6 +68,7 @@ var (
 	nonCertDomains                = flag.String("non-cert-domains", "", "No obtain certificate for mathed domains. Regexpes separated by comma.")
 	pidFilePath                   = flag.String("pid-file", "lets-proxy.pid", "Write pid of process. When used --daemon - lock the file for prevent double-start daemon.")
 	preventIDNDecode              = flag.Bool("prevent-idn-decode", false, "Default domain show in log as 'domain.com' or 'xn--d1acufc.xn--p1ai' ('домен.рф'). When option used it will shown as 'domain.com' or 'xn--d1acufc.xn--p1ai', without decode idn domains.")
+	privateKeyBits                = flag.Int("private-key-len", 2048, "Length of private keys in bits")
 	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
 	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
 	runAs                         = flag.String("runas", "", "Run as other user. It work only for --daemon, only for unix and require to run from specified user or root. It can be user login or user id. It change default work dir to home folder of the user (can be changed by explicit --"+WORKING_DIR_ARG_NAME+"). Run will fail if use the option without --daemon.")
@@ -802,7 +802,7 @@ func prepare() {
 
 	if state.PrivateKey == nil {
 		logrus.Info("Generate private keys")
-		state.PrivateKey, err = rsa.GenerateKey(cryptorand.Reader, PRIVATE_KEY_BITS)
+		state.PrivateKey, err = rsa.GenerateKey(cryptorand.Reader, *privateKeyBits)
 		state.changed = true
 		if err != nil {
 			logrus.Panic("Can't generate private key")

@@ -326,7 +326,7 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 	}
 
 	// Generate CSR
-	certKey, err := rsa.GenerateKey(cryptorand.Reader, PRIVATE_KEY_BITS)
+	certKey, err := rsa.GenerateKey(cryptorand.Reader, *privateKeyBits)
 	if err == nil {
 		logrus.Debugf("Create private key for domains '%v'", authorizedDomains)
 	} else {

@@ -19,6 +19,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"runtime/debug"
@@ -26,7 +27,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-	"path/filepath"
 )
 
 const (
@@ -70,7 +70,7 @@ var (
 	pidFilePath                   = flag.String("pid-file", "lets-proxy.pid", "Write pid of process. When used --daemon - lock the file for prevent double-start daemon.")
 	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
 	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
-	runAs                         = flag.String("runas", "", "Run as other user. It work only for --daemon, only for unix and require to run from specified user or root. It can be user login or user id. It change default work dir to home folder of the user (can be changed by explicit --" + WORKING_DIR_ARG_NAME + "). Run will fail if use the option without --daemon.")
+	runAs                         = flag.String("runas", "", "Run as other user. It work only for --daemon, only for unix and require to run from specified user or root. It can be user login or user id. It change default work dir to home folder of the user (can be changed by explicit --"+WORKING_DIR_ARG_NAME+"). Run will fail if use the option without --daemon.")
 	serviceAction                 = flag.String("service-action", "", "start,stop,install,uninstall,reinstall")
 	serviceName                   = flag.String("service-name", SERVICE_NAME_EXAMPLE, "service name, need for service actions")
 	stateFilePath                 = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
@@ -423,7 +423,15 @@ checkCertInCache:
 			// need for background cert renew
 			if cert.Leaf.NotAfter.Before(time.Now().Add(*timeToRenew)) {
 				go func(domainsToObtain []string, baseDomain string) {
-					// TODO: additional check to exiting certs for avoid overwrite and clean by regexp
+					if skipDomainsCheck(domainsToObtain) {
+						return
+					}
+
+					if isBaseDomainLocked(baseDomain) {
+						skipDomainsAdd([]string(domainsToObtain))
+						return
+					}
+
 					if obtainDomainsLock(domainsToObtain) {
 						defer obtainDomainsUnlock(domainsToObtain)
 					} else {
@@ -442,9 +450,9 @@ checkCertInCache:
 			// pass to obtain cert
 		}
 
-		if badDomainsGetBad([]string{domain}) != nil {
-			logrus.Infof("Temporary blocked domain: '%v'", domain)
-			return nil, errors.New("Domain temporary blocked")
+		if skipDomainsCheck([]string{domain}) {
+			logrus.Infof("Temporary skip domain: '%v'", domain)
+			return nil, errors.New("Domain temporary skipped")
 		}
 
 		if domainsToObtain == nil {
@@ -453,6 +461,13 @@ checkCertInCache:
 			for _, subdomain := range subdomainPrefixedForUnion {
 				domainsToObtain = append(domainsToObtain, subdomain+baseDomain)
 			}
+		}
+
+		if isBaseDomainLocked(baseDomain) {
+			logrus.Infof("Add domains '%v' to temporary skip damain set, becouse '%v' is locked", domainsToObtain,
+				baseDomain)
+			skipDomainsAdd(domainsToObtain)
+			return nil, errors.New("Domain is locked")
 		}
 
 		if obtainDomainsLock(domainsToObtain) {
@@ -503,11 +518,11 @@ forRegexpCheckDomain:
 			}
 		}
 		if len(domainsForBlock) > 0 {
-			badDomainsAdd(domainsForBlock)
+			skipDomainsAdd(domainsForBlock)
 		}
 	} else {
 		logrus.Infof("Can't obtain certificate for domains '%v': %v", allowedByRegexp, err)
-		badDomainsAdd([]string{domain})
+		skipDomainsAdd([]string{domain})
 		return nil, errors.New("Can't obtain acme certificate")
 	}
 
@@ -792,7 +807,7 @@ func prepare() {
 
 	acmeService.Init()
 
-	badDomainsStartCleaner()
+	skipDomainsStartCleaner()
 }
 
 func saveState(state stateStruct) {
@@ -893,6 +908,13 @@ func containString(slice []string, s string) bool {
 	return false
 }
 
+func isBaseDomainLocked(domain string) {
+	lockFilePath := filepath.Join(*certDir, domain+".lock")
+	_, err := os.Stat(lockFilePath)
+	fileExists := !os.IsNotExist(err)
+	return fileExists
+}
+
 func resolveAddr(s string) *net.TCPAddr {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", s)
 	if err != nil {
@@ -921,6 +943,18 @@ func usage() {
 	fmt.Println()
 
 	flag.PrintDefaults()
+
+	fmt.Println(`
+Lock certificates for domain:
+If <certificates> contain file <basedomain>.lock - lets-proxy will not try to obtain/renew certificate.
+It will handle certificate with existed crt/key file or return error.
+Lock domains need to handle https of some domains with own certificate.
+Lets-proxy never rewrite crt/key file for locked domains.
+For any of domains in <subdomains-union> - check base domain (not subdomain). For example with default settings
+file 'domain.com.lock' will lock 'domain.com' and 'www.domain.com' and file 'www.domain.com.lock' will not work for
+domain 'www.domain.com'.
+
+`)
 
 	flag.CommandLine.SetOutput(os.Stderr)
 }

@@ -56,6 +56,10 @@
 			"Rev": "7e024ce8ce18b21b475ac6baf8fa3c42536bf2fa"
 		},
 		{
+			"ImportPath": "github.com/miekg/dns/idn",
+			"Rev": "7e024ce8ce18b21b475ac6baf8fa3c42536bf2fa"
+		},
+		{
 			"ImportPath": "github.com/peterhellberg/link",
 			"Comment": "v1.0.0",
 			"Rev": "d1cebc7ea14a5fc0de7cb4a45acae773161642c6"

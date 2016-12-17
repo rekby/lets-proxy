@@ -33,7 +33,7 @@ func certificateCacheGet(domain string) *tls.Certificate {
 	if certMemCache != nil {
 		certP, ok := certMemCache.Get(domain)
 		if ok {
-			logrus.Debugf("Got certificate from memory cache for domain '%v'", domain)
+			logrus.Debugf("Got certificate from memory cache for domain %v", DomainPresent(domain))
 			return certP.(*tls.Certificate)
 		} else {
 			logrus.Debugf("Havn't certificate for '%v' in memory cache", domain)
@@ -50,46 +50,46 @@ func certificateCacheGet(domain string) *tls.Certificate {
 
 	switch {
 	case err == nil:
-		logrus.Debugf("Certificate files readed for domain '%v'", domain)
+		logrus.Debugf("Certificate files readed for domain %v", DomainPresent(domain))
 	case os.IsNotExist(err):
 		logrus.Debugf("Certificate cache path key: '%v', cert: '%v'", keyPath, certPath)
-		logrus.Infof("Have no certificate/key in cert-dir for domain '%v'", domain)
+		logrus.Infof("Have no certificate/key in cert-dir for domain %v", DomainPresent(domain))
 		return nil
 	default:
-		logrus.Errorf("Can't certificate/key load from file for domain '%v': %v", domain, err)
+		logrus.Errorf("Can't certificate/key load from file for domain %v: %v", DomainPresent(domain), err)
 		return nil
 	}
 
 	if len(cert.Certificate) == 0 {
-		logrus.Errorf("No certificates in file for domain '%v', file '%v'", domain, certPath)
+		logrus.Errorf("No certificates in file for domain %v, file '%v'", DomainPresent(domain), certPath)
 		return nil
 	}
 	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 	if err == nil {
-		logrus.Debugf("Certificate parsed for domain '%v'", domain)
+		logrus.Debugf("Certificate parsed for domain %v", DomainPresent(domain))
 
 		if certMemCache != nil {
-			logrus.Debugf("Put certificate to memory cache '%v' while get from disk cache", domain)
+			logrus.Debugf("Put certificate to memory cache '%v' while get from disk cache", DomainPresent(domain))
 			certMemCache.Add(domain, &cert)
 		}
 		return &cert
 	} else {
-		logrus.Errorf("Can't parse certificate for domain '%v': %v", domain, err)
+		logrus.Errorf("Can't parse certificate for domain %v: %v", DomainPresent(domain), err)
 		return nil
 	}
 }
 
 func certificateCachePut(domain string, cert *tls.Certificate) {
-	logrus.Infof("Certificate put to cache for domain '%v'", domain)
+	logrus.Infof("Certificate put to cache for domain %v", DomainPresent(domain))
 
 	if isBaseDomainLocked(domain) {
-		logrus.Errorf("Try to save certificate for locked domain '%v'. It is bag, report to developer please",
-			domain)
+		logrus.Errorf("Try to save certificate for locked domain %v. It is bag, report to developer please",
+			DomainPresent(domain))
 		return
 	}
 
 	if certMemCache != nil {
-		logrus.Debugf("Put cert in memory cache for domain '%v'", domain)
+		logrus.Debugf("Put cert in memory cache for domain %v", DomainPresent(domain))
 		certMemCache.Add(domain, cert)
 	}
 
@@ -128,7 +128,7 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 	case *ecdsa.PrivateKey:
 		keyBytes, err := x509.MarshalECPrivateKey(key)
 		if err != nil {
-			logrus.Errorf("Error while marshal ecdsa-key for domain '%v': %v", domain, err)
+			logrus.Errorf("Error while marshal ecdsa-key for domain %v: %v", DomainPresent(domain), err)
 			return
 		}
 		pemBlock := pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes}
@@ -156,7 +156,7 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 		}
 	}
 
-	logrus.Infof("Save certificate for domain '%v' to files: %v, %v", domain, keyPath, certPath)
+	logrus.Infof("Save certificate for domain %v to files: %v, %v", DomainPresent(domain), keyPath, certPath)
 
 	if *certJsonSave {
 		if cert.Leaf != nil {

@@ -56,9 +56,9 @@ func domainHasLocalIP(ctx context.Context, domain string) bool {
 		if err == nil {
 			ipsChan <- ips
 		} else {
-			logrus.Warnf("Can't local lookup ip for domain '%v': %v", domain, err)
+			logrus.Warnf("Can't local lookup ip for domain %v: %v", DomainPresent(domain), err)
 		}
-		logrus.Debugf("Receive answer from local lookup for domain '%v' ips: '%v'", domain, ips)
+		logrus.Debugf("Receive answer from local lookup for domain %v ips: '%v'", DomainPresent(domain), ips)
 		dnsRequests.Done()
 	}()
 
@@ -98,14 +98,14 @@ func domainHasLocalIP(ctx context.Context, domain string) bool {
 		for _, ip := range ips {
 			// If domain has ip doesn't that doesn't bind to the server
 			if !ipContains(allowIPs, ip) {
-				logrus.Debugf("Domain have ip of other server. Domain '%v', Domain ips: '%v', Server ips: '%v'", domain, ips, allowIPs)
+				logrus.Debugf("Domain have ip of other server. domain %v, Domain ips: '%v', Server ips: '%v'", DomainPresent(domain), ips, allowIPs)
 				return false
 			}
 		}
 	}
 
 	if !hasIP {
-		logrus.Infof("Doesn't found ip addresses for domain '%v'", domain)
+		logrus.Infof("Doesn't found ip addresses for domain %v", DomainPresent(domain))
 		return false
 	}
 	return true
@@ -120,11 +120,11 @@ func getIPsFromDNS(ctx context.Context, domain, dnsServer string, recordType uin
 	msg.SetQuestion(domain, recordType)
 	answer, _, err := dnsClient.Exchange(&msg, dnsServer)
 	if err != nil {
-		logrus.Infof("Error from dns server '%v' for domain '%v', record type '%v': %v", dnsServer, domain, dns.TypeToString[recordType], err)
+		logrus.Infof("Error from dns server '%v' for domain %v, record type '%v': %v", dnsServer, DomainPresent(domain), dns.TypeToString[recordType], err)
 		return nil
 	}
 	if answer.Id != msg.Id {
-		logrus.Infof("Error answer ID from dns server '%v' for domain '%v', record type '%v', %v != %v", dnsServer, domain, dns.TypeToString[recordType], msg.Id, answer.Id)
+		logrus.Infof("Error answer ID from dns server '%v' for domain %v, record type '%v', %v != %v", dnsServer, DomainPresent(domain), dns.TypeToString[recordType], msg.Id, answer.Id)
 		return nil
 	}
 	var res []net.IP
@@ -141,6 +141,6 @@ func getIPsFromDNS(ctx context.Context, domain, dnsServer string, recordType uin
 			continue
 		}
 	}
-	logrus.Debugf("Receive answer from dns server '%v' for domain '%v' record type '%v' ips: '%v'", dnsServer, domain, dns.TypeToString[recordType], res)
+	logrus.Debugf("Receive answer from dns server '%v' for domain %v record type '%v' ips: '%v'", dnsServer, DomainPresent(domain), dns.TypeToString[recordType], res)
 	return res
 }

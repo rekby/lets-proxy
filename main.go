@@ -68,6 +68,7 @@ var (
 	noLogStderr                   = flag.Bool("no-log-stderr", false, "supress log to stderr")
 	nonCertDomains                = flag.String("non-cert-domains", "", "No obtain certificate for mathed domains. Regexpes separated by comma.")
 	pidFilePath                   = flag.String("pid-file", "lets-proxy.pid", "Write pid of process. When used --daemon - lock the file for prevent double-start daemon.")
+	preventIDNDecode              = flag.Bool("prevent-idn-decode", false, "Default domain show in log as 'domain.com' or 'xn--d1acufc.xn--p1ai' ('домен.рф'). When option used it will shown as 'domain.com' or 'xn--d1acufc.xn--p1ai', without decode idn domains.")
 	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
 	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
 	runAs                         = flag.String("runas", "", "Run as other user. It work only for --daemon, only for unix and require to run from specified user or root. It can be user login or user id. It change default work dir to home folder of the user (can be changed by explicit --"+WORKING_DIR_ARG_NAME+"). Run will fail if use the option without --daemon.")
@@ -126,7 +127,7 @@ func main() {
 
 	// Set loglevel
 	logrus.SetLevel(logrus.WarnLevel)
-	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp:true})
+	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
 	switch *logLevel {
 	case "fatal":
 		logrus.SetLevel(logrus.FatalLevel)
@@ -213,7 +214,6 @@ func main() {
 	default:
 		logrus.SetOutput(io.MultiWriter(logouts...))
 	}
-
 
 	logrus.Infof("Use log level: '%v'", logrus.GetLevel())
 	logrus.Info("Version: ", VERSION)
@@ -399,7 +399,7 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 		}
 	}
 
-	logrus.Debugf("Required certificate for domain '%v'", domain)
+	logrus.Debugf("Required certificate for domain %v", DomainPresent(domain))
 
 	if strings.HasSuffix(domain, ACME_DOMAIN_SUFFIX) {
 		// force generate new certificate, without caching.
@@ -410,7 +410,7 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 checkCertInCache:
 	for {
 		if ctx.Err() != nil {
-			logrus.Info("Can't get certificate for domain '%v' by cancel context: %v", domain, ctx.Err())
+			logrus.Info("Can't get certificate for domain %v by cancel context: %v", DomainPresent(domain), ctx.Err())
 			return nil, errors.New("Get certificate timeout")
 		}
 
@@ -422,10 +422,10 @@ checkCertInCache:
 		switch {
 		case cert != nil && cert.Leaf.NotAfter.Before(now):
 			if isBaseDomainLocked(baseDomain) {
-				logrus.Infof("Expired certificate got from cache for domain '%v'. It is locked domain. Use expired cert.", domain)
+				logrus.Infof("Expired certificate got from cache for domain %v. It is locked domain. Use expired cert.", DomainPresent(domain))
 				return cert, nil
 			} else {
-				logrus.Infof("Expired certificate got from cache for domain '%v'. Obtain new cert.", domain)
+				logrus.Infof("Expired certificate got from cache for domain %v. Obtain new cert.", DomainPresent(domain))
 				// pass to obtain new certificate
 			}
 
@@ -484,7 +484,7 @@ checkCertInCache:
 			break checkCertInCache // create cert
 		} else {
 			// wait, then cert in cache again
-			logrus.Infof("Obtain certificate in process for domain '%v', wait a second and check it again", domain)
+			logrus.Infof("Obtain certificate in process for domain %v, wait a second and check it again", DomainPresent(domain))
 			time.Sleep(time.Second)
 			continue checkCertInCache
 		}
@@ -506,7 +506,7 @@ forRegexpCheckDomain:
 	for _, checkDomain := range domainsToObtain {
 		for _, re := range nonCertDomainsRegexps {
 			if re.MatchString(domain) {
-				logrus.Debugf("Ignore obtain cert for domain '%v' by regexp '%v'", domain, re.String())
+				logrus.Debugf("Ignore obtain cert for domain %v by regexp '%v'", DomainPresent(domain), re.String())
 				continue forRegexpCheckDomain
 			}
 		}
@@ -617,7 +617,7 @@ func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
 	if serverName == "" {
 		serverName = *defaultDomain + " (by default)"
 	}
-	logrus.Infof("Start proxy from '%v' to '%v' cid '%v' domain '%v'", in.RemoteAddr(), &target, cid, serverName)
+	logrus.Infof("Start proxy from '%v' to '%v' cid '%v' domain %v", in.RemoteAddr(), &target, cid, DomainPresent(serverName))
 	startProxy(cid, target, tlsConn)
 }
 

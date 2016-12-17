@@ -10,7 +10,7 @@ var (
 	certDomainsObtaining      = make(map[string]bool)
 	certDomainsObtainingMutex = &sync.Mutex{}
 
-	skipDomainMap = make(map[string]time.Time)
+	skipDomainMap      = make(map[string]time.Time)
 	skipDomainMapMutex = &sync.Mutex{}
 )
 
@@ -81,7 +81,7 @@ func skipDomainsCheck(domains []string) bool {
 	return false
 }
 
-func skipDomainsFlush(){
+func skipDomainsFlush() {
 	skipDomainMapMutex.Lock()
 	skipDomainMap = make(map[string]time.Time)
 	skipDomainMapMutex.Unlock()

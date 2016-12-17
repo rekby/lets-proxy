@@ -909,7 +909,7 @@ func containString(slice []string, s string) bool {
 	return false
 }
 
-func isBaseDomainLocked(domain string) {
+func isBaseDomainLocked(domain string) bool {
 	lockFilePath := filepath.Join(*certDir, domain+".lock")
 	_, err := os.Stat(lockFilePath)
 	fileExists := !os.IsNotExist(err)

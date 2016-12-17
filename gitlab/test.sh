@@ -84,6 +84,13 @@ function restart_proxy(){
     sleep 3 # Allow to start, generate keys, etc.
 }
 
+function flush_cache(){
+    PID=`cat lets-proxy.pid`
+    if [ -n "$PID" ]; then
+        kill -SIGHUP "$PID"
+    fi
+    sleep 1
+}
 restart_proxy
 TEST=`curl -vsk https://${TMP_DOMAIN}`
 
@@ -181,4 +188,25 @@ if ! [ -e certificates/${TMP_DOMAIN3WWWONLY_WITHOUT_WWW}.crt ] || ! grep -q ${TM
     exit 1
 fi
 
+echo
+echo "Try lock working domain and request it with exited cert"
+touch certificates/${TMP_DOMAIN}.lock
+flush_cache
+
+TEST=`curl -sk https://${TMP_DOMAIN}`
+test_or_exit "HOST" "HOST: ${TMP_DOMAIN}"
+
+echo "Remove existed certificate"
+rm -rf certificates/${TMP_DOMAIN}{.crt,.key}
+flush_cache
+TEST=`curl -sk https://${TMP_DOMAIN}` # must be empty becouse lets-proxy must return error
+if [ -n "${TEST}" ]; then
+    echo "Obtain cert for locked domain"
+    echo "${TEST}"
+
+    delete_domain
+    exit 1
+fi
+
 delete_domain
+

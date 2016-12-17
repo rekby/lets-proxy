@@ -21,6 +21,13 @@ var (
 	PRIVATE_KEY_FILEMODE os.FileMode = 0600
 )
 
+func certificateCacheFlushMem(){
+	if certMemCache != nil {
+		logrus.Debug("Flush memory cache certificates")
+		certMemCache.Purge()
+	}
+}
+
 // Must return valid certificate with non nil cert.Leaf or return nil
 func certificateCacheGet(domain string) *tls.Certificate {
 	if certMemCache != nil {

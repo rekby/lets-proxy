@@ -82,6 +82,7 @@ func skipDomainsCheck(domains []string) bool {
 }
 
 func skipDomainsFlush() {
+	logrus.Debug("Flush skip domains set")
 	skipDomainMapMutex.Lock()
 	skipDomainMap = make(map[string]time.Time)
 	skipDomainMapMutex.Unlock()

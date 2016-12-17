@@ -171,7 +171,8 @@ func signalWorker(){
 	for s := range osSignals {
 		switch s {
 		case syscall.SIGHUP:
-			certMemCache.Purge()
+			logrus.Info("Flush cache by SIGHUP")
+			certificateCacheFlushMem()
 			skipDomainsFlush()
 		}
 	}

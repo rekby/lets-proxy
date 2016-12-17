@@ -16,10 +16,17 @@ import (
 )
 
 var (
-	certMemCache      *lru.Cache
-	DEFAULT_FILE_MODE os.FileMode = 0644
+	certMemCache         *lru.Cache
+	DEFAULT_FILE_MODE    os.FileMode = 0644
 	PRIVATE_KEY_FILEMODE os.FileMode = 0600
 )
+
+func certificateCacheFlushMem(){
+	if certMemCache != nil {
+		logrus.Debug("Flush memory cache certificates")
+		certMemCache.Purge()
+	}
+}
 
 // Must return valid certificate with non nil cert.Leaf or return nil
 func certificateCacheGet(domain string) *tls.Certificate {
@@ -75,6 +82,12 @@ func certificateCacheGet(domain string) *tls.Certificate {
 func certificateCachePut(domain string, cert *tls.Certificate) {
 	logrus.Infof("Certificate put to cache for domain '%v'", domain)
 
+	if isBaseDomainLocked(domain) {
+		logrus.Errorf("Try to save certificate for locked domain '%v'. It is bag, report to developer please",
+			domain)
+		return
+	}
+
 	if certMemCache != nil {
 		logrus.Debugf("Put cert in memory cache for domain '%v'", domain)
 		certMemCache.Add(domain, cert)
@@ -94,7 +107,7 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 	certPath := filepath.Join(*certDir, domain+".crt")
 	jsonPath := filepath.Join(*certDir, domain+".json")
 
-	keyFile, err := os.OpenFile(keyPath, os.O_CREATE | os.O_WRONLY | os.O_TRUNC, PRIVATE_KEY_FILEMODE)
+	keyFile, err := os.OpenFile(keyPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, PRIVATE_KEY_FILEMODE)
 	if keyFile != nil {
 		defer keyFile.Close()
 	}
@@ -126,7 +139,7 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 		}
 	}
 
-	certFile, err := os.OpenFile(certPath, os.O_CREATE | os.O_WRONLY | os.O_TRUNC, DEFAULT_FILE_MODE)
+	certFile, err := os.OpenFile(certPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, DEFAULT_FILE_MODE)
 	if certFile != nil {
 		defer certFile.Close()
 	}

@@ -73,14 +73,49 @@ function delete_domain(){
     ./ypdd $DOMAIN del $ID
 }
 
+function exit_error(){
+    echo "DELETE TMP DOMAINS"
+    delete_domain
+
+    echo "LOG"
+    cat log.txt
+    exit 1
+}
+
+
 go build -o proxy github.com/rekby/lets-proxy
 
-echo "Start proxy interactive - for view full log"
+function restart_proxy(){
+    PID=`cat lets-proxy.pid`
+    if [ -n "$PID" ]; then
+        kill -9 "$PID"
+    fi
+    ./proxy --test --logout=log.txt --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https --connection-id-header=Connection-ID --cert-json --daemon --pid-file=lets-proxy.pid
+    sleep 10 # Allow to start, generate keys, etc.
+}
 
-./proxy --test --logout=log.txt --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https --connection-id-header=Connection-ID --cert-json --daemon --pid-file=lets-proxy.pid
-#./proxy &  ## REAL CERT. WARNING - LIMITED CERT REQUEST
+function flush_cache(){
+    PIDFILE="lets-proxy.pid"
+    PID=`cat ${PIDFILE}`
+    if [ -n "$PID" ]; then
+        if ! kill -SIGHUP "$PID"; then
+            echo "PID FAILED"
+            echo "PIDFILE: ${PIDFILE}"
+            echo "PID: ${PID}"
 
-sleep 10 # Allow to start, generate keys, etc.
+            echo "Process list"
+            ps aux
+
+            exit_error
+        fi
+    fi
+    sleep 1
+
+}
+restart_proxy
+
+echo "Check PID"
+flush_cache
 
 TEST=`curl -vsk https://${TMP_DOMAIN}`
 
@@ -97,8 +132,7 @@ function test_or_exit(){
         return
     else
         echo "${NAME}-FAIL"
-        delete_domain
-        exit 1
+        exit_error
     fi
 
 }
@@ -122,8 +156,7 @@ else
     echo
     echo certificates/${TMP_DOMAIN}.key
     cat certificates/${TMP_DOMAIN}.key
-    delete_domain
-    exit 1
+    exit_error
 fi
 
 echo "Test install proxy"
@@ -147,8 +180,7 @@ curl -k https://${TMP_DOMAIN2} >/dev/null 2>&1 # Wait answer
 CERTS_OBTAINED=`cat log.txt | grep "BEGIN CERTIFICATE" | wc -l`
 if [ "${CERTS_OBTAINED}" != "1" ]; then
     echo "Must be only one cert obtained. But obtained: ${CERTS_OBTAINED}"
-    delete_domain
-    exit 1
+    exit_error
 fi
 echo "Obtain only one cert for a domain same time - OK"
 sleep 3 # For more readable logs
@@ -160,8 +192,7 @@ test_or_exit "HOST" "HOST: ${TMP_WWWDOMAIN2}"
 # Have metadata
 cat certificates/${TMP_DOMAIN2}.json
 if ! ( grep -q ${TMP_WWWDOMAIN2} certificates/${TMP_DOMAIN2}.json && grep -q ${TMP_WWWDOMAIN2} certificates/${TMP_DOMAIN2}.json ); then
-    delete_domain
-    exit 1
+    exit_error
 fi
 
 echo
@@ -174,8 +205,30 @@ if ! [ -e certificates/${TMP_DOMAIN3WWWONLY_WITHOUT_WWW}.crt ] || ! grep -q ${TM
     echo
     cat certificates/${TMP_DOMAIN3WWWONLY_WITHOUT_WWW}.json
 
-    delete_domain
-    exit 1
+    exit_error
+fi
+
+echo
+echo "Try lock working domain and request it with exited cert"
+touch certificates/${TMP_DOMAIN}.lock
+flush_cache
+
+TEST=`curl -sk https://${TMP_DOMAIN}`
+test_or_exit "HOST" "HOST: ${TMP_DOMAIN}"
+
+echo "Remove existed certificate"
+rm -rf certificates/${TMP_DOMAIN}{.crt,.key}
+flush_cache
+TEST=`curl -sk https://${TMP_DOMAIN}` # must be empty becouse lets-proxy must return error
+if [ -n "${TEST}" ]; then
+    echo "Obtain cert for locked domain"
+    echo "${TEST}"
+
+    echo
+    ls -la certificates/
+
+    exit_error
 fi
 
 delete_domain
+

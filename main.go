@@ -415,7 +415,7 @@ checkCertInCache:
 		}
 
 		cert = certificateCacheGet(baseDomain)
-		if cert != nil && !containString(cert.Leaf.DNSNames, domain) {
+		if cert != nil && !containString(cert.Leaf.DNSNames, domain) && !isBaseDomainLocked(baseDomain) {
 			cert = nil
 		}
 

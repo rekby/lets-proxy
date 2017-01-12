@@ -13,8 +13,21 @@ const (
 	NETBUF_SIZE = 2048 // bytes
 )
 
+//go:generate stringer -type KeepAliveModeType
+type KeepAliveModeType int
+const (
+	KEEPALIVE_BOTH KeepAliveModeType = iota
+	KEEPALIVE_NOBACKEND
+)
+
+const (
+	KEEPALIVE_BOTH_STRING = "both"
+	KEEPALIVE_NOBACKEND_STRING = "nobackend"
+)
+
 var (
 	poolNetBuffers sync.Pool
+	keepAliveMode KeepAliveModeType
 )
 
 // var-constants

@@ -57,6 +57,7 @@ var (
 	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain doesn't available (have zero length). For example client doesn't support SNI. It used for obtain and use certificate only. It isn't forse set header HOST in request.")
 	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind nat.")
 	inMemoryCertCount             = flag.Int("in-memory-cnt", 100, "How many count of certs cache in memory for prevent parse it from file")
+	keepAliveModeS                 = flag.String("keepalive", KEEPALIVE_BOTH_STRING, KEEPALIVE_BOTH_STRING + " - keepalive from user to server if both support else doesn't keepalive. " + KEEPALIVE_NOBACKEND_STRING + " - force doesn't use keepalive connection to backend, but can handle keepalive from user.")
 	logLevel                      = flag.String("loglevel", "warning", "fatal|error|warning|info|debug")
 	logOutput                     = flag.String("logout", "-", "Path to logout. Special: '-' (without quotes) - stderr")
 	logrotateMaxAge               = flag.Int("logrotate-age", 30, "How many days keep old backups")
@@ -687,6 +688,13 @@ func prepare() {
 	if *certDir == "-" {
 		*certDir = ""
 	}
+
+	if *keepAliveModeS == KEEPALIVE_NOBACKEND_STRING {
+		keepAliveMode = KEEPALIVE_NOBACKEND
+	} else {
+		keepAliveMode = KEEPALIVE_BOTH
+	}
+	logrus.Infof("KeepAlive mode: %v", keepAliveMode)
 
 	workingDir, err := os.Getwd()
 	logrus.Infof("Working dir '%v', err: %v", workingDir, err)

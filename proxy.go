@@ -57,7 +57,12 @@ func netbufPut(buf []byte) {
 	poolNetBuffers.Put(buf)
 }
 
-func proxyHTTPHeaders(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn) (keepalive bool, contentLength int64) {
+
+func proxyHTTPHeaders(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn) (
+res struct {
+	KeepAlive bool
+	ContentLength int64
+}) {
 	buf := netbufGet()
 	defer netbufPut(buf)
 	var totalReadBytes int
@@ -173,17 +178,17 @@ readHeaderLines:
 		if needHeaderContent {
 			switch {
 			case bytes.Equal(headerNameUpperCase, HEAD_CONNECTION):
-				keepalive = bytes.EqualFold(HEAD_CONNECTION_KEEP_ALIVE, bytes.TrimSpace(headerContent.Bytes()))
+				res.KeepAlive = bytes.EqualFold(HEAD_CONNECTION_KEEP_ALIVE, bytes.TrimSpace(headerContent.Bytes()))
 
 			case bytes.Equal(headerNameUpperCase, HEAD_CONTENT_LENGTH):
-				contentLength, err = strconv.ParseInt(string(bytes.TrimSpace(headerContent.Bytes())), 10, 64)
+				res.ContentLength, err = strconv.ParseInt(string(bytes.TrimSpace(headerContent.Bytes())), 10, 64)
 				if err == nil {
 					logrus.Debugf("Header content-length parsed from '%v' to '%v' cid '%v': %v", sourceConn.RemoteAddr(),
-						targetConn.RemoteAddr(), cid, contentLength)
+						targetConn.RemoteAddr(), cid, res.ContentLength)
 				} else {
 					logrus.Infof("Can't header content-length parsed from '%v' to '%v' cid '%v' content '%s': %v", sourceConn.RemoteAddr(),
 						targetConn.RemoteAddr(), cid, headerContent.Bytes(), err)
-					contentLength = 0
+					res.ContentLength = 0
 				}
 
 			default:
@@ -275,12 +280,12 @@ func startProxyHTTP(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn) 
 		defer netbufPut(buf)
 		var summBytesCopied int64
 		for {
-			keepalive, contentLength := proxyHTTPHeaders(cid, targetConn, sourceConn)
-			if keepalive {
+			state := proxyHTTPHeaders(cid, targetConn, sourceConn)
+			if state.KeepAlive {
 				logrus.Debugf("Start keep-alieved proxy. '%v' -> '%v' cid '%v', content-length '%v'", sourceConn.RemoteAddr(),
-					targetConn.RemoteAddr(), cid, contentLength)
+					targetConn.RemoteAddr(), cid, state.ContentLength)
 
-				bytesCopied, err := io.CopyBuffer(targetConn, io.LimitReader(sourceConn, contentLength), buf)
+				bytesCopied, err := io.CopyBuffer(targetConn, io.LimitReader(sourceConn, state.ContentLength), buf)
 				summBytesCopied += bytesCopied
 				logrus.Debugf("Connection chunk copied '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, bytesCopied, summBytesCopied, err)
 				if err != nil {

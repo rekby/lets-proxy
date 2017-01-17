@@ -297,7 +297,6 @@ func startProxyHTTP(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn) 
 				logrus.Debugf("Cid '%v'. Can't copy answer to customer: %v", cid, err)
 				return
 			}
-
 		} else {
 			// answer from server proxy without changes
 			go func() {
@@ -321,7 +320,7 @@ func startProxyHTTP(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn) 
 			return
 		}
 
-		if !keepAliveMode {
+		if !keepAlive {
 			return
 		}
 	}

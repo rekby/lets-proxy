@@ -9,6 +9,8 @@ import (
 	"sync"
 	"fmt"
 	"time"
+	"errors"
+	"unicode"
 )
 
 const (
@@ -38,6 +40,7 @@ var (
 	HEAD_CONNECTION            = []byte("CONNECTION")
 	HEAD_CONNECTION_KEEP_ALIVE = []byte("KEEP-ALIVE")
 	HEAD_CONTENT_LENGTH        = []byte("CONTENT-LENGTH")
+	HEAD_HTTP_1_1 = []byte("HTTP/1.1")
 )
 
 func connectTo(cid ConnectionID, targetAddr net.TCPAddr)(conn *net.TCPConn, err error){
@@ -75,7 +78,12 @@ func netbufPut(buf []byte) {
 	poolNetBuffers.Put(buf)
 }
 
-func proxyHTTPHeaders(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn) (
+const (
+	PROXY_KEEPALIVE_NOTHING = iota
+	PROXY_KEEPALIVE_FORCE
+	PROXY_KEEPALIVE_DROP
+)
+func proxyHTTPHeaders(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn, proxyKeepAliveMode int) (
 	res struct {
 		KeepAlive        bool
 		ContentLength    int64
@@ -86,6 +94,7 @@ func proxyHTTPHeaders(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn
 	defer netbufPut(buf)
 	var totalReadBytes int
 
+	isFirstLine := false
 	// Read lines
 readHeaderLines:
 	for {
@@ -111,7 +120,19 @@ readHeaderLines:
 		}
 		if len(headerStart) == 0 {
 			logrus.Infof("Header line longer then buffer (%v bytes). Force close connection. '%v' -> '%v' cid '%v'.", len(buf), sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid)
+			res.Err = errors.New("Very long header name")
 			return
+		}
+
+		if isFirstLine {
+			lastIndex := len(headerStart)-1
+			for lastIndex > 0 && headerStart[lastIndex] == '\r' || headerStart[lastIndex] == '\n'{
+				lastIndex--
+			}
+			trimmedHeader := headerStart[:lastIndex+1]
+			if bytes.HasSuffix(trimmedHeader, HEAD_HTTP_1_1) {
+				res.KeepAlive = true
+			}
 		}
 
 		// Empty line - end http headers
@@ -128,9 +149,10 @@ readHeaderLines:
 				skipHeader = true
 				break
 			}
-			ownHeaderS := string(ownHeader)
-			headerNameS := string(headerNameUpperCase)
-			skipHeader = ownHeaderS == headerNameS
+		}
+
+		if proxyKeepAliveMode != PROXY_KEEPALIVE_NOTHING {
+			skipHeader = skipHeader || bytes.Equal(headerNameUpperCase, HEAD_CONNECTION)
 		}
 
 		if skipHeader {
@@ -228,6 +250,18 @@ readHeaderLines:
 		headerBuf.WriteString("\r\n")
 	}
 
+	// Write Keepalive
+	switch proxyKeepAliveMode {
+	case PROXY_KEEPALIVE_FORCE:
+		headerBuf.WriteString("Connection: Keep-Alive\r\n")
+	case PROXY_KEEPALIVE_DROP:
+		headerBuf.WriteString("Connection: Close\r\n")
+	case PROXY_KEEPALIVE_NOTHING:
+		// pass
+	default:
+		panic(errors.New("Unknown proxy keepalive mode"))
+	}
+
 	headerBuf.Write(additionalHeaders)
 	headerBuf.Write([]byte("\r\n")) // end http headers
 	logrus.Debugf("Add headers. '%v' -> '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), headerBuf.Bytes())
@@ -277,10 +311,14 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			}
 		}
 
+		proxyKeepAliveModeToBackend := PROXY_KEEPALIVE_NOTHING
+		proxyKeepAliveModeToCustomer := PROXY_KEEPALIVE_NOTHING
 		if keepAliveMode == KEEPALIVE_NO_BACKEND {
 			customerConn.SetReadDeadline(time.Now().Add(*keepAliveCustomerTimeout))
+			proxyKeepAliveModeToBackend = PROXY_KEEPALIVE_DROP
+			proxyKeepAliveModeToCustomer = PROXY_KEEPALIVE_FORCE
 		}
-		state := proxyHTTPHeaders(cid, backendConn, customerConn)
+		state := proxyHTTPHeaders(cid, backendConn, customerConn, proxyKeepAliveModeToBackend)
 		if keepAliveMode == KEEPALIVE_NO_BACKEND {
 			// Current not timeout during proxy request.
 			customerConn.SetReadDeadline(time.Time{})
@@ -306,7 +344,7 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			}
 
 			// proxy answer
-			answerState := proxyHTTPHeaders(cid, customerConn, backendConn)
+			answerState := proxyHTTPHeaders(cid, customerConn, backendConn, proxyKeepAliveModeToCustomer)
 			keepAlive = keepAlive && answerState.KeepAlive
 			var reader io.Reader
 

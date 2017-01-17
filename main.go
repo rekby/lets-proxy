@@ -57,7 +57,8 @@ var (
 	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain doesn't available (have zero length). For example client doesn't support SNI. It used for obtain and use certificate only. It isn't forse set header HOST in request.")
 	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind nat.")
 	inMemoryCertCount             = flag.Int("in-memory-cnt", 100, "How many count of certs cache in memory for prevent parse it from file")
-	keepAliveModeS                 = flag.String("keepalive", KEEPALIVE_BOTH_STRING, KEEPALIVE_BOTH_STRING + " - keepalive from user to server if both support else doesn't keepalive. " + KEEPALIVE_NOBACKEND_STRING + " - force doesn't use keepalive connection to backend, but can handle keepalive from user.")
+	keepAliveModeS                = flag.String("keepalive", KEEPALIVE_TRANSPARENT_STRING, KEEPALIVE_TRANSPARENT_STRING+" - keepalive from user to server if both support else doesn't keepalive. "+KEEPALIVE_NO_BACKEND_STRING+" - force doesn't use keepalive connection to backend, but can handle keepalive from user.")
+	keepAliveCustomerTimeout      = flag.Duration("keepalive-customer-timeout", time.Minute*15, "When keepalive in mode '"+KEEPALIVE_NO_BACKEND_STRING+"' - how long time keep customer's connection. In '"+KEEPALIVE_TRANSPARENT_STRING+"' mode timeout don't used and both connection close when one of backend or customer close self connection.")
 	logLevel                      = flag.String("loglevel", "warning", "fatal|error|warning|info|debug")
 	logOutput                     = flag.String("logout", "-", "Path to logout. Special: '-' (without quotes) - stderr")
 	logrotateMaxAge               = flag.Int("logrotate-age", 30, "How many days keep old backups")
@@ -689,10 +690,10 @@ func prepare() {
 		*certDir = ""
 	}
 
-	if *keepAliveModeS == KEEPALIVE_NOBACKEND_STRING {
-		keepAliveMode = KEEPALIVE_NOBACKEND
+	if *keepAliveModeS == KEEPALIVE_NO_BACKEND_STRING {
+		keepAliveMode = KEEPALIVE_NO_BACKEND
 	} else {
-		keepAliveMode = KEEPALIVE_BOTH
+		keepAliveMode = KEEPALIVE_TRANSPARENT
 	}
 	logrus.Infof("KeepAlive mode: %v", keepAliveMode)
 

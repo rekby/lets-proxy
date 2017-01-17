@@ -7,6 +7,8 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"fmt"
+	"time"
 )
 
 const (
@@ -17,13 +19,13 @@ const (
 type KeepAliveModeType int
 
 const (
-	KEEPALIVE_BOTH KeepAliveModeType = iota
-	KEEPALIVE_NOBACKEND
+	KEEPALIVE_TRANSPARENT KeepAliveModeType = iota
+	KEEPALIVE_NO_BACKEND
 )
 
 const (
-	KEEPALIVE_BOTH_STRING      = "both"
-	KEEPALIVE_NOBACKEND_STRING = "nobackend"
+	KEEPALIVE_TRANSPARENT_STRING = "transparent"
+	KEEPALIVE_NO_BACKEND_STRING  = "nobackend"
 )
 
 var (
@@ -250,59 +252,85 @@ func startProxy(cid ConnectionID, targetAddr net.TCPAddr, in net.Conn) {
 	}
 }
 
-func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, sourceConn net.Conn) {
-	defer sourceConn.Close()
+func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.Conn) {
+	defer customerConn.Close()
 
-	targetConn, err := connectTo(cid, targetAddr)
-	if err == nil {
-		defer targetConn.Close()
-		logrus.Debugf("Start http-proxy connection from '%v' to '%v' cid '%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid)
-	} else {
-		logrus.Warnf("Cid '%v'. Can't connect to target '%v': %v", cid, targetAddr, err)
-		return
-	}
-
+	var backendConn *net.TCPConn
+	defer func(){
+		if backendConn != nil {
+			backendConn.Close()
+		}
+	}()
+	var err error
 
 	buf := netbufGet()
 	defer netbufPut(buf)
 	var receivedBytesCount int64
 	for {
-		state := proxyHTTPHeaders(cid, targetConn, sourceConn)
+		if backendConn == nil {
+			backendConn, err = connectTo(cid, targetAddr)
+			if err == nil {
+				logrus.Debugf("Start http-proxy connection from '%v' to '%v' cid '%v'", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid)
+			} else {
+				logrus.Warnf("Cid '%v'. Can't connect to target '%v': %v", cid, targetAddr, err)
+				return
+			}
+		}
+
+		if keepAliveMode == KEEPALIVE_NO_BACKEND {
+			customerConn.SetReadDeadline(time.Now().Add(*keepAliveCustomerTimeout))
+		}
+		state := proxyHTTPHeaders(cid, backendConn, customerConn)
+		if keepAliveMode == KEEPALIVE_NO_BACKEND {
+			// Current not timeout during proxy request.
+			customerConn.SetReadDeadline(time.Time{})
+		}
 		keepAlive := state.KeepAlive
 		if state.Err != nil {
 			logrus.Debug("Cid '%v'. Can't read headers: %v", cid, state.Err)
 			return
 		}
 		if state.HasContextLength {
-			logrus.Debugf("Start keep-alieved proxy. '%v' -> '%v' cid '%v', content-length '%v'", sourceConn.RemoteAddr(),
-				targetConn.RemoteAddr(), cid, state.ContentLength)
+			logrus.Debugf("Start keep-alieved proxy. '%v' -> '%v' cid '%v', content-length '%v'", customerConn.RemoteAddr(),
+				backendConn.RemoteAddr(), cid, state.ContentLength)
 
 			//request
-			bytesCopied, err := io.CopyBuffer(targetConn, io.LimitReader(sourceConn, state.ContentLength), buf)
+			bytesCopied, err := io.CopyBuffer(backendConn, io.LimitReader(customerConn, state.ContentLength), buf)
 			receivedBytesCount += bytesCopied
 
 			if err == nil {
-				logrus.Debugf("Connection chunk copied '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
+				logrus.Debugf("Connection chunk copied '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
 			} else {
-				logrus.Debugf("Connection closed '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
+				logrus.Debugf("Connection closed '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
 				return
 			}
 
 			// proxy answer
-			answerState := proxyHTTPHeaders(cid, sourceConn, targetConn)
+			answerState := proxyHTTPHeaders(cid, customerConn, backendConn)
 			keepAlive = keepAlive && answerState.KeepAlive
 			var reader io.Reader
 
 			if answerState.HasContextLength {
-				reader = io.LimitReader(targetConn, answerState.ContentLength)
+				reader = io.LimitReader(backendConn, answerState.ContentLength)
 			} else {
-				reader = targetConn
+				reader = backendConn
 			}
 
-			_, err = io.CopyBuffer(sourceConn, reader, buf)
+			_, err = io.CopyBuffer(customerConn, reader, buf)
 			if err != nil {
 				logrus.Debugf("Cid '%v'. Can't copy answer to customer: %v", cid, err)
 				return
+			}
+
+			switch keepAliveMode {
+			case KEEPALIVE_TRANSPARENT:
+				// pass
+				// keep connections
+			case KEEPALIVE_NO_BACKEND:
+				backendConn.Close()
+				backendConn = nil
+			default:
+				panic(fmt.Errorf("I doesn't know keep alive mode '%v'", keepAliveMode))
 			}
 		} else {
 			// answer from server proxy without changes
@@ -310,19 +338,19 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, sourceConn net.Con
 				buf := netbufGet()
 				defer netbufPut(buf)
 
-				_, err := io.CopyBuffer(sourceConn, targetConn, buf)
-				logrus.Debugf("Connection closed with error1 '%v' -> '%v' cid '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, err)
-				sourceConn.Close()
-				targetConn.Close()
+				_, err := io.CopyBuffer(customerConn, backendConn, buf)
+				logrus.Debugf("Connection closed with error1 '%v' -> '%v' cid '%v': %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, err)
+				customerConn.Close()
+				backendConn.Close()
 			}()
 
-			logrus.Debugf("Start proxy without support keepalive middle headers '%v' -> '%v' cid '%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid)
-			bytesCopied, err := io.CopyBuffer(targetConn, sourceConn, buf)
+			logrus.Debugf("Start proxy without support keepalive middle headers '%v' -> '%v' cid '%v'", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid)
+			bytesCopied, err := io.CopyBuffer(backendConn, customerConn, buf)
 			receivedBytesCount += bytesCopied
 			if err == nil {
-				logrus.Debugf("Connection closed '%v' -> '%v' cid '%v', bytes transferred '%v' (%v).", sourceConn, targetConn, cid, bytesCopied, receivedBytesCount)
+				logrus.Debugf("Connection closed '%v' -> '%v' cid '%v', bytes transferred '%v' (%v).", customerConn, backendConn, cid, bytesCopied, receivedBytesCount)
 			} else {
-				logrus.Debugf("Connection closed '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
+				logrus.Debugf("Connection closed '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
 			}
 			return
 		}

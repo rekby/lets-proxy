@@ -4,9 +4,9 @@ package main
 
 import "fmt"
 
-const _KeepAliveModeType_name = "KEEPALIVE_BOTHKEEPALIVE_NOBACKEND"
+const _KeepAliveModeType_name = "KEEPALIVE_TRANSPARENTKEEPALIVE_NO_BACKEND"
 
-var _KeepAliveModeType_index = [...]uint8{0, 14, 33}
+var _KeepAliveModeType_index = [...]uint8{0, 21, 41}
 
 func (i KeepAliveModeType) String() string {
 	if i < 0 || i >= KeepAliveModeType(len(_KeepAliveModeType_index)-1) {

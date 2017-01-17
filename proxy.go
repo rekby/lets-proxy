@@ -38,6 +38,21 @@ var (
 	HEAD_CONTENT_LENGTH        = []byte("CONTENT-LENGTH")
 )
 
+func connectTo(cid ConnectionID, targetAddr net.TCPAddr)(conn *net.TCPConn, err error){
+	targetConnCommon, err := net.DialTimeout("tcp", targetAddr.String(), *targetConnTimeout)
+	if err != nil {
+		logrus.Warnf("Can't connect to target '%v' cid '%v': %v", targetAddr.String(), cid, err)
+		return nil, err
+	}
+
+	targetConn := targetConnCommon.(*net.TCPConn)
+	targetConn.SetKeepAlive(true)
+	targetConn.SetKeepAlivePeriod(*tcpKeepAliveInterval)
+	return targetConn, nil
+}
+
+
+
 // Get or create network buffer for proxy
 func netbufGet() (buf []byte) {
 	bufInterface := poolNetBuffers.Get()
@@ -224,37 +239,29 @@ readHeaderLines:
 }
 
 func startProxy(cid ConnectionID, targetAddr net.TCPAddr, in net.Conn) {
-	targetConnCommon, err := net.DialTimeout("tcp", targetAddr.String(), *targetConnTimeout)
-	if err != nil {
-		logrus.Warnf("Can't connect to target '%v' cid '%v': %v", targetAddr.String(), cid, err)
-		in.Close()
-		return
-	}
-
-	targetConn, ok := targetConnCommon.(*net.TCPConn)
-	targetConn.SetKeepAlive(true)
-	targetConn.SetKeepAlivePeriod(*tcpKeepAliveInterval)
-
-	if !ok {
-		logrus.Errorf("Can't cast connection to tcp connection, target '%v' cid '%v'", targetAddr.String(), cid)
-		return
-	}
-
 	switch *proxyMode {
 	case "http":
-		startProxyHTTP(cid, targetConn, in)
+		startProxyHTTP(cid, targetAddr, in)
 	case "tcp":
-		startProxyTCP(cid, targetConn, in)
+		startProxyTCP(cid, targetAddr, in)
 	default:
+		in.Close()
 		logrus.Panicf("Unknow proxy mode cid '%v': %v", cid, *proxyMode)
 	}
 }
 
-func startProxyHTTP(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn) {
-	defer targetConn.Close()
+func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, sourceConn net.Conn) {
 	defer sourceConn.Close()
 
-	logrus.Debugf("Start http-proxy connection from '%v' to '%v' cid '%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid)
+	targetConn, err := connectTo(cid, targetAddr)
+	if err == nil {
+		defer targetConn.Close()
+		logrus.Debugf("Start http-proxy connection from '%v' to '%v' cid '%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid)
+	} else {
+		logrus.Warnf("Cid '%v'. Can't connect to target '%v': %v", cid, targetAddr, err)
+		return
+	}
+
 
 	buf := netbufGet()
 	defer netbufPut(buf)
@@ -327,8 +334,14 @@ func startProxyHTTP(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn) 
 
 }
 
-func startProxyTCP(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn) {
-	logrus.Infof("Start tcp-proxy connection from '%v' to'%v' cid '%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid)
+func startProxyTCP(cid ConnectionID, targetAddr net.TCPAddr, sourceConn net.Conn) {
+	targetConn, err := connectTo(cid, targetAddr)
+	if err == nil {
+		logrus.Infof("Start tcp-proxy connection from '%v' to'%v' cid '%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid)
+	} else {
+		logrus.Warnf("CID '%v'. Can't connect to target addr '%v': %v", cid, targetAddr, err)
+		return
+	}
 
 	go func() {
 		buf := netbufGet()

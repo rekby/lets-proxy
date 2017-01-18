@@ -82,13 +82,14 @@ const (
 	PROXY_KEEPALIVE_FORCE
 	PROXY_KEEPALIVE_DROP
 )
+type proxyHTTPHeadersRes struct {
+	KeepAlive        bool
+	ContentLength    int64
+	HasContentLength bool
+	Err              error
+}
 func proxyHTTPHeaders(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn, proxyKeepAliveMode int) (
-	res struct {
-		KeepAlive        bool
-		ContentLength    int64
-		HasContextLength bool
-		Err              error
-	}) {
+	res proxyHTTPHeadersRes) {
 	buf := netbufGet()
 	defer netbufPut(buf)
 	var totalReadBytes int
@@ -211,7 +212,7 @@ readHeaderLines:
 			case bytes.Equal(headerNameUpperCase, HEAD_CONTENT_LENGTH):
 				res.ContentLength, res.Err = strconv.ParseInt(string(bytes.TrimSpace(headerContent.Bytes())), 10, 64)
 				if res.Err == nil {
-					res.HasContextLength = true
+					res.HasContentLength = true
 					logrus.Debugf("Header content-length parsed from '%v' to '%v' cid '%v': %v", sourceConn.RemoteAddr(),
 						targetConn.RemoteAddr(), cid, res.ContentLength)
 				} else {
@@ -327,7 +328,7 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			logrus.Debug("Cid '%v'. Can't read headers: %v", cid, state.Err)
 			return
 		}
-		if state.HasContextLength {
+		if state.HasContentLength {
 			logrus.Debugf("Start keep-alieved proxy. '%v' -> '%v' cid '%v', content-length '%v'", customerConn.RemoteAddr(),
 				backendConn.RemoteAddr(), cid, state.ContentLength)
 
@@ -347,7 +348,7 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			keepAlive = keepAlive && answerState.KeepAlive
 			var reader io.Reader
 
-			if answerState.HasContextLength {
+			if answerState.HasContentLength {
 				reader = io.LimitReader(backendConn, answerState.ContentLength)
 			} else {
 				reader = backendConn

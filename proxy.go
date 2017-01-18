@@ -2,14 +2,14 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"github.com/Sirupsen/logrus"
 	"io"
 	"net"
 	"strconv"
 	"sync"
-	"fmt"
 	"time"
-	"errors"
 )
 
 const (
@@ -36,13 +36,13 @@ var (
 
 // var-constants
 var (
-	HEAD_CONNECTION            = []byte("CONNECTION")
-	HEAD_CONNECTION_KEEP_ALIVE = []byte("KEEP-ALIVE")
-	HEAD_CONTENT_LENGTH        = []byte("CONTENT-LENGTH")
-	HEAD_HTTP_1_1 = []byte("HTTP/1.1")
+	HEAD_CONNECTION       = []byte("CONNECTION")
+	HEAD_CONNECTION_CLOSE = []byte("CLOSE")
+	HEAD_CONTENT_LENGTH   = []byte("CONTENT-LENGTH")
+	HEAD_HTTP_1_1         = []byte("HTTP/1.1")
 )
 
-func connectTo(cid ConnectionID, targetAddr net.TCPAddr)(conn *net.TCPConn, err error){
+func connectTo(cid ConnectionID, targetAddr net.TCPAddr) (conn *net.TCPConn, err error) {
 	targetConnCommon, err := net.DialTimeout("tcp", targetAddr.String(), *targetConnTimeout)
 	if err != nil {
 		logrus.Warnf("Can't connect to target '%v' cid '%v': %v", targetAddr.String(), cid, err)
@@ -54,8 +54,6 @@ func connectTo(cid ConnectionID, targetAddr net.TCPAddr)(conn *net.TCPConn, err 
 	targetConn.SetKeepAlivePeriod(*tcpKeepAliveInterval)
 	return targetConn, nil
 }
-
-
 
 // Get or create network buffer for proxy
 func netbufGet() (buf []byte) {
@@ -82,19 +80,21 @@ const (
 	PROXY_KEEPALIVE_FORCE
 	PROXY_KEEPALIVE_DROP
 )
+
 type proxyHTTPHeadersRes struct {
 	KeepAlive        bool
 	ContentLength    int64
 	HasContentLength bool
 	Err              error
 }
+
 func proxyHTTPHeaders(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn, proxyKeepAliveMode int) (
 	res proxyHTTPHeadersRes) {
 	buf := netbufGet()
 	defer netbufPut(buf)
 	var totalReadBytes int
 
-	isFirstLine := false
+	isFirstLine := true
 	// Read lines
 readHeaderLines:
 	for {
@@ -125,8 +125,9 @@ readHeaderLines:
 		}
 
 		if isFirstLine {
-			lastIndex := len(headerStart)-1
-			for lastIndex > 0 && headerStart[lastIndex] == '\r' || headerStart[lastIndex] == '\n'{
+			isFirstLine = false
+			lastIndex := len(headerStart) - 1
+			for lastIndex > 0 && headerStart[lastIndex] == '\r' || headerStart[lastIndex] == '\n' {
 				lastIndex--
 			}
 			trimmedHeader := headerStart[:lastIndex+1]
@@ -151,38 +152,37 @@ readHeaderLines:
 			}
 		}
 
-		if proxyKeepAliveMode != PROXY_KEEPALIVE_NOTHING {
+		switch proxyKeepAliveMode {
+		case PROXY_KEEPALIVE_NOTHING:
+			// pass
+		case PROXY_KEEPALIVE_DROP:
 			skipHeader = skipHeader || bytes.Equal(headerNameUpperCase, HEAD_CONNECTION)
+		case PROXY_KEEPALIVE_FORCE:
+			skipHeader = skipHeader || bytes.Equal(headerNameUpperCase, HEAD_CONNECTION)
+		default:
+			panic("Unknow proxyKeepAliveMode")
 		}
+
 
 		if skipHeader {
 			logrus.Debugf("Skip header: '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerNameUpperCase)
-			buf[0] = headerStart[len(headerStart)-1]
+		} else {
+			logrus.Debugf("Copy header: '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName)
 
-			for buf[0] != '\n' {
-				_, res.Err = sourceConn.Read(buf[:1])
-				if res.Err != nil {
-					logrus.Infof("Error read header. Close connections. '%v' -> '%v' cid '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, res.Err)
-					sourceConn.Close()
-					targetConn.Close()
-					return
-				}
+			_, res.Err = targetConn.Write(headerStart)
+			if res.Err != nil {
+				logrus.Infof("Write header start, from '%v' to '%v' cid '%v', headerStart='%s': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerStart, res.Err)
+				return
 			}
-			continue readHeaderLines
 		}
 
-		logrus.Debugf("Copy header: '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName)
-
-		// copy header without changes
-		_, res.Err = targetConn.Write(headerStart)
-		if res.Err != nil {
-			logrus.Infof("Write header start, from '%v' to '%v' cid '%v', headerStart='%s': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerStart, res.Err)
-			return
-		}
+		var headerContent *bytes.Buffer
 
 		needHeaderContent := bytes.Equal(headerNameUpperCase, HEAD_CONTENT_LENGTH) || bytes.Equal(headerNameUpperCase, HEAD_CONNECTION)
-		headerContent := bytes.NewBuffer(buf[1:])
-		headerContent.Reset()
+		if needHeaderContent {
+			headerContent = bytes.NewBuffer(buf[1:])
+			headerContent.Reset()
+		}
 
 		for buf[0] != '\n' {
 			var readBytes int
@@ -193,9 +193,12 @@ readHeaderLines:
 			}
 			if readBytes != 1 {
 				logrus.Infof("Header copy read bytes != 1. Error. Close connections. '%v' -> '%v' cid '%v'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid)
+				res.Err = errors.New("Can't read a byte from source conn")
 				return
 			}
-			_, res.Err = targetConn.Write(buf[:1])
+			if !skipHeader {
+				_, res.Err = targetConn.Write(buf[:1])
+			}
 			if res.Err != nil {
 				logrus.Infof("Error write header. Close connections. '%v' -> '%v' cid '%v': %v", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, res.Err)
 				return
@@ -207,7 +210,7 @@ readHeaderLines:
 		if needHeaderContent {
 			switch {
 			case bytes.Equal(headerNameUpperCase, HEAD_CONNECTION):
-				res.KeepAlive = bytes.EqualFold(HEAD_CONNECTION_KEEP_ALIVE, bytes.TrimSpace(headerContent.Bytes()))
+				res.KeepAlive = !bytes.EqualFold(HEAD_CONNECTION_CLOSE, bytes.TrimSpace(headerContent.Bytes()))
 
 			case bytes.Equal(headerNameUpperCase, HEAD_CONTENT_LENGTH):
 				res.ContentLength, res.Err = strconv.ParseInt(string(bytes.TrimSpace(headerContent.Bytes())), 10, 64)
@@ -290,7 +293,7 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 	defer customerConn.Close()
 
 	var backendConn *net.TCPConn
-	defer func(){
+	defer func() {
 		if backendConn != nil {
 			backendConn.Close()
 		}

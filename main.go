@@ -57,6 +57,7 @@ var (
 	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain doesn't available (have zero length). For example client doesn't support SNI. It used for obtain and use certificate only. It isn't forse set header HOST in request.")
 	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind nat.")
 	inMemoryCertCount             = flag.Int("in-memory-cnt", 100, "How many count of certs cache in memory for prevent parse it from file")
+	initOnly                      = flag.Bool("init-only", false, "Exit after initialize, generate self keys. Need for auto-test environment.")
 	keepAliveModeS                = flag.String("keepalive", KEEPALIVE_TRANSPARENT_STRING, KEEPALIVE_TRANSPARENT_STRING+" - keepalive from user to server if both support else doesn't keepalive. "+KEEPALIVE_NO_BACKEND_STRING+" - force doesn't use keepalive connection to backend, but can handle keepalive from user.")
 	keepAliveCustomerTimeout      = flag.Duration("keepalive-customer-timeout", time.Minute*15, "When keepalive in mode '"+KEEPALIVE_NO_BACKEND_STRING+"' - how long time keep customer's connection. In '"+KEEPALIVE_TRANSPARENT_STRING+"' mode timeout don't used and both connection close when one of backend or customer close self connection.")
 	logLevel                      = flag.String("loglevel", "warning", "fatal|error|warning|info|debug")
@@ -225,6 +226,10 @@ func main() {
 	}
 
 	prepare()
+	if *initOnly {
+		return
+	}
+
 	go signalWorker()
 
 	var serviceArguments []string

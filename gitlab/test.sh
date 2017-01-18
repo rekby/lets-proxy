@@ -84,6 +84,7 @@ function exit_error(){
 
 
 go build -o proxy github.com/rekby/lets-proxy
+./proxy --init-only # Generate keys. It need longer then one second - sleep time in restart. It need wait until process complete.
 
 function restart_proxy(){
     PID=`cat lets-proxy.pid`

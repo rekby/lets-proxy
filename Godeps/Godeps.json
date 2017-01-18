@@ -65,6 +65,10 @@
 			"Rev": "d1cebc7ea14a5fc0de7cb4a45acae773161642c6"
 		},
 		{
+			"ImportPath": "github.com/rekby/pair-connections",
+			"Rev": "152f445fd49b512da5a160b6e4e5a7ec9ccb463a"
+		},
+		{
 			"ImportPath": "github.com/sevlyar/go-daemon",
 			"Comment": "v0.1.0-5-g8577c7d",
 			"Rev": "8577c7ddef908e104dae56c9e46f0956cb33c844"

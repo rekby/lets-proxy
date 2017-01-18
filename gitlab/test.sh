@@ -90,7 +90,7 @@ function restart_proxy(){
     if [ -n "$PID" ]; then
         kill -9 "$PID"
     fi
-    ./proxy --test --private-key-len=512 --logout=log.txt --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https --connection-id-header=Connection-ID --cert-json --daemon --pid-file=lets-proxy.pid
+    ./proxy --test --logout=log.txt --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https --connection-id-header=Connection-ID --cert-json --daemon --pid-file=lets-proxy.pid
     sleep 1 # Allow to start, generate keys, etc.
 }
 

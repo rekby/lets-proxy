@@ -43,10 +43,6 @@ var (
 	}
 )
 
-func init() {
-	getAllowIPs()
-}
-
 func getAllowIPs() ipSlice {
 	if *allowIPRefreshInterval == 0 {
 		res := forceReadAllowedIPs()
@@ -56,6 +52,7 @@ func getAllowIPs() ipSlice {
 
 	if nextUpdateTime, ok := globalAllowedIPsNextUpdateTime.Load().(time.Time); !ok || nextUpdateTime.Before(time.Now()){
 		globalAllowedIPsMutex.Lock()
+		defer globalAllowedIPsMutex.Unlock()
 
 		// second check after get mutex. It can be updated in other thread
 		if nextUpdateTime, ok := globalAllowedIPsNextUpdateTime.Load().(time.Time); !ok || nextUpdateTime.Before(time.Now()){
@@ -63,12 +60,10 @@ func getAllowIPs() ipSlice {
 			logrus.Infof("Update allowed ips to: %v", res)
 			globalAllowedIPs.Store(res)
 			globalAllowedIPsNextUpdateTime.Store(time.Now().Add(*allowIPRefreshInterval))
-		} else {
-			return globalAllowedIPs.Load().(ipSlice)
 		}
-		defer globalAllowedIPsMutex.Unlock()
 	}
-	return globalAllowedIPs.Load().(ipSlice)
+	ips := globalAllowedIPs.Load().(ipSlice)
+	return ips
 }
 
 func getLocalIPs() (res ipSlice) {

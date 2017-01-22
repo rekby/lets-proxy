@@ -57,6 +57,11 @@ func obtainDomainsUnlock(domains []string) {
 }
 
 func skipDomainsAdd(domains []string) {
+	if *blockBadDomainDuration == 0 {
+		logrus.Debugf("Skip add domains to bad list, becouse bad list is disabled: '%v'", domains)
+		return
+	}
+
 	skipDomainMapMutex.Lock()
 	defer skipDomainMapMutex.Unlock()
 
@@ -89,6 +94,11 @@ func skipDomainsFlush() {
 }
 
 func skipDomainsStartCleaner() {
+	if *blockBadDomainDuration == 0 {
+		logrus.Debugf("Bad domain cleaner doesn't start becouse block domains is disabled")
+		return
+	}
+
 	skipDomainMapMutex.Lock()
 	defer skipDomainMapMutex.Unlock()
 

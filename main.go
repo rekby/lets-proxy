@@ -772,7 +772,8 @@ func prepare() {
 		logrus.Fatal("Nothing address to bind")
 	}
 
-	initAllowedIPs()
+	allowedIps := getAllowIPs()
+	logrus.Infof("Allowed IPs on start: %v", allowedIps)
 
 	// targetMap
 	if *mapTargetS != "" {

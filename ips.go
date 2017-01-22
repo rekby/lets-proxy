@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"flag"
 )
 
 type ipSlice []net.IP
@@ -32,8 +33,10 @@ func (slice ipSlice) Swap(a, b int) {
 var (
 	needUpdateAllowedIpList = false
 
-	globalAllowedIPs atomic.Value
-	localIPNetworks  = []net.IPNet{ // additional filter to ip.IsGlobalUnicast, issue https://github.com/golang/go/issues/11772
+	globalAllowedIPs               atomic.Value
+	globalAllowedIPsMutex           = sync.Mutex{}
+	globalAllowedIPsNextUpdateTime atomic.Value
+	localIPNetworks                  = []net.IPNet{ // additional filter to ip.IsGlobalUnicast, issue https://github.com/golang/go/issues/11772
 		parseNet("10.0.0.0/8"),
 		parseNet("172.16.0.0/12"),
 		parseNet("192.168.0.0/16"),
@@ -41,12 +44,32 @@ var (
 	}
 )
 
-func init() {
-	globalAllowedIPs.Store(ipSlice{})
-}
-
 func getAllowIPs() ipSlice {
-	return globalAllowedIPs.Load().(ipSlice)
+	if !flag.Parsed() {
+		logrus.Debug("Try get allowed ips before parse options")
+		return nil
+	}
+
+	if *allowIPRefreshInterval == 0 {
+		res := forceReadAllowedIPs()
+		logrus.Infof("Update allowed ips to: %v", res)
+		return res
+	}
+
+	if nextUpdateTime, ok := globalAllowedIPsNextUpdateTime.Load().(time.Time); !ok || nextUpdateTime.Before(time.Now()){
+		globalAllowedIPsMutex.Lock()
+		defer globalAllowedIPsMutex.Unlock()
+
+		// second check after get mutex. It can be updated in other thread
+		if nextUpdateTime, ok := globalAllowedIPsNextUpdateTime.Load().(time.Time); !ok || nextUpdateTime.Before(time.Now()){
+			res := forceReadAllowedIPs()
+			logrus.Infof("Update allowed ips to: %v", res)
+			globalAllowedIPs.Store(res)
+			globalAllowedIPsNextUpdateTime.Store(time.Now().Add(*allowIPRefreshInterval))
+		}
+	}
+	ips := globalAllowedIPs.Load().(ipSlice)
+	return ips
 }
 
 func getLocalIPs() (res ipSlice) {
@@ -119,9 +142,8 @@ func getIpByExternalRequest() (res ipSlice) {
 	return res
 }
 
-func initAllowedIPs() {
+func forceReadAllowedIPs() ipSlice {
 	var allowedIPs ipSlice
-
 	for _, allowed := range strings.Split(*allowIPsString, ",") {
 		allowed = strings.TrimSpace(allowed)
 		switch {
@@ -184,7 +206,6 @@ func initAllowedIPs() {
 				}
 			}
 
-
 			hasPublicIPv4 := false
 			for _, ip := range autoAllowedIps {
 				if ip.To4() != nil && isPublicIp(ip) {
@@ -215,7 +236,6 @@ func initAllowedIPs() {
 			allowedIPs = append(allowedIPs, net.ParseIP(allowed))
 		}
 	}
-
 	sort.Sort(allowedIPs)
 	cleanedAllowedIPs := ipSlice{}
 	prevIP := net.IP{}
@@ -238,11 +258,7 @@ func initAllowedIPs() {
 	} else {
 		logrus.Info("No need update alowed ip list")
 	}
-	globalAllowedIPs.Store(allowedIPs)
-
-	if needUpdateAllowedIpList {
-		time.AfterFunc(*allowIPRefreshInterval, initAllowedIPs)
-	}
+	return allowedIPs
 }
 
 func ipCompare(a, b net.IP) int {

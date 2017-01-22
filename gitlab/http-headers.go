@@ -19,7 +19,9 @@ func main(){
 		}
 
 		if req.Host != "" {
-			resp.Write([]byte("HOST: " + req.Host + "\r\n\r\n"))
+			resp.Write([]byte("HOST: " + req.Host + "\r\n"))
+			fmt.Fprintf(resp, "REMOTE: %v\r\n", req.RemoteAddr)
+			resp.Write([]byte("\r\n\r\n"))
 		}
 		sort.Strings(names)
 		for _, name := range names {
@@ -34,5 +36,7 @@ func main(){
 		req.Body.Close()
 		resp.Write(requestBytes)
 	})
-	http.ListenAndServe(":80", nil)
+	server := &http.Server{Addr: ":80"}
+	server.SetKeepAlivesEnabled(true)
+	server.ListenAndServe()
 }

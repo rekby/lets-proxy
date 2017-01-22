@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"flag"
 )
 
 type ipSlice []net.IP
@@ -44,6 +45,11 @@ var (
 )
 
 func getAllowIPs() ipSlice {
+	if !flag.Parsed() {
+		logrus.Debug("Try get allowed ips before parse options")
+		return nil
+	}
+
 	if *allowIPRefreshInterval == 0 {
 		res := forceReadAllowedIPs()
 		logrus.Infof("Update allowed ips to: %v", res)

@@ -48,7 +48,7 @@ var (
 	additionalHeadersParam        = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Several headers separated by comma.")
 	allowIPRefreshInterval        = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often allow ip addresses will be refreshed. Allowable format https://golang.org/pkg/time/#ParseDuration")
 	allowIPsString                = flag.String("allowed-ips", "auto", "allowable ip-addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, it logic can change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to http://ifconfig.io/ip - it need for public ip autodetection behinde nat.")
-	bindToS                       = flag.String("bind-to", ":443", "")
+	bindToS                       = flag.String("bind-to", ":443", "List of ports,ip addresses or port:ip separated by comma. For example: 1.1.1.1,2.2.2.2,3.3.3.3:443,4.4.4.4. Ports other then 443 may be used only if tcp-connections proxied from port 443 (iptables,nginx,socat and so on) becouse lets-encrypt now force check connections by 443 port only.")
 	blockBadDomainDuration        = flag.Duration("block-bad-domain-duration", time.Hour, "Disable try obtain certtificate for domain after error")
 	certDir                       = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
 	certJsonSave                  = flag.Bool("cert-json", false, "Save json info about certificate near the certificate file with same name with .json extension")

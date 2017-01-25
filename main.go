@@ -815,18 +815,20 @@ func prepare() {
 		acmeService.serverAddress = *acmeServerUrl
 	}
 
-	if state.PrivateKey == nil {
-		logrus.Info("Generate private keys")
-		state.PrivateKey, err = rsa.GenerateKey(cryptorand.Reader, *privateKeyBits)
-		state.changed = true
-		if err != nil {
-			logrus.Panic("Can't generate private key")
+	if *serviceAction=="" {
+		if state.PrivateKey == nil {
+			logrus.Info("Generate private keys")
+			state.PrivateKey, err = rsa.GenerateKey(cryptorand.Reader, *privateKeyBits)
+			state.changed = true
+			if err != nil {
+				logrus.Panic("Can't generate private key")
+			}
+		} else {
+			logrus.Debugf("Skip generate keys - it was read from state")
 		}
-	} else {
-		logrus.Debugf("Skip generate keys - it was read from state")
-	}
 
-	saveState(state)
+		saveState(state)
+	}
 
 	acmeService.privateKey = state.PrivateKey
 

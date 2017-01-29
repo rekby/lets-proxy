@@ -128,6 +128,11 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
+	if *versionPrint {
+		fmt.Println(strings.TrimSpace(VERSION))
+		return
+	}
+
 	// Set loglevel
 	logrus.SetLevel(logrus.WarnLevel)
 	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
@@ -170,11 +175,6 @@ func main() {
 		if err != nil {
 			logrus.Error("Can't change working dir: ", err)
 		}
-	}
-
-	if *versionPrint {
-		fmt.Println(strings.TrimSpace(VERSION))
-		return
 	}
 
 	isDaemon = isDaemon || !service.Interactive() && runtime.GOOS == "windows"

@@ -40,6 +40,9 @@ var (
 	HEAD_CONNECTION_CLOSE = []byte("CLOSE")
 	HEAD_CONTENT_LENGTH   = []byte("CONTENT-LENGTH")
 	HEAD_HTTP_1_1         = []byte("HTTP/1.1")
+
+	// https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol#Summary_table
+	HTTP_METHOD_WITHOUT_BODY = [][]byte{[]byte("GET"), []byte("HEAD"), []byte("DELETE"), []byte("TRACE")}
 )
 
 func connectTo(cid ConnectionID, targetAddr net.TCPAddr) (conn *net.TCPConn, err error) {
@@ -85,11 +88,14 @@ type proxyHTTPHeadersRes struct {
 	KeepAlive        bool
 	ContentLength    int64
 	HasContentLength bool
+	HasBody          bool
 	Err              error
 }
 
 func proxyHTTPHeaders(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn, proxyKeepAliveMode int) (
 	res proxyHTTPHeadersRes) {
+	res.HasBody = true
+
 	buf := netbufGet()
 	defer netbufPut(buf)
 	var totalReadBytes int
@@ -134,6 +140,11 @@ readHeaderLines:
 			if bytes.HasSuffix(trimmedHeader, HEAD_HTTP_1_1) {
 				res.KeepAlive = true
 			}
+			for _, testMethod := range HTTP_METHOD_WITHOUT_BODY {
+				if len(headerStart) > len(testMethod) && bytes.EqualFold(testMethod, headerStart[:len(testMethod)]) {
+					res.HasBody = false
+				}
+			}
 		}
 
 		// Empty line - end http headers
@@ -162,7 +173,6 @@ readHeaderLines:
 		default:
 			panic("Unknow proxyKeepAliveMode")
 		}
-
 
 		if skipHeader {
 			logrus.Debugf("Skip header: '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerNameUpperCase)
@@ -331,19 +341,21 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			logrus.Debug("Cid '%v'. Can't read headers: %v", cid, state.Err)
 			return
 		}
-		if state.HasContentLength {
+		if state.HasContentLength || !state.HasBody {
 			logrus.Debugf("Start keep-alieved proxy. '%v' -> '%v' cid '%v', content-length '%v'", customerConn.RemoteAddr(),
 				backendConn.RemoteAddr(), cid, state.ContentLength)
 
-			//request
-			bytesCopied, err := io.CopyBuffer(backendConn, io.LimitReader(customerConn, state.ContentLength), buf)
-			receivedBytesCount += bytesCopied
+			if state.HasBody {
+				//request
+				bytesCopied, err := io.CopyBuffer(backendConn, io.LimitReader(customerConn, state.ContentLength), buf)
+				receivedBytesCount += bytesCopied
 
-			if err == nil {
-				logrus.Debugf("Connection chunk copied '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
-			} else {
-				logrus.Debugf("Connection closed '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
-				return
+				if err == nil {
+					logrus.Debugf("Connection chunk copied '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
+				} else {
+					logrus.Debugf("Connection closed '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
+					return
+				}
 			}
 
 			// proxy answer

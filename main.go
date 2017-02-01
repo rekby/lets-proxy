@@ -417,7 +417,7 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 checkCertInCache:
 	for {
 		if ctx.Err() != nil {
-			logrus.Info("Can't get certificate for domain %v by cancel context: %v", DomainPresent(domain), ctx.Err())
+			logrus.Infof("Can't get certificate for domain %v by cancel context: %v", DomainPresent(domain), ctx.Err())
 			return nil, errors.New("Get certificate timeout")
 		}
 

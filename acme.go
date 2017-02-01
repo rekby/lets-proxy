@@ -294,7 +294,7 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 		authorizedDomains = append(authorizedDomains, domain)
 	}
 	if main_domain != "" && !containString(authorizedDomains, main_domain) {
-		logrus.Info("Authorized domains '%v' doesn't contain main domain %v", authorizedDomains, DomainPresent(main_domain))
+		logrus.Infof("Authorized domains '%v' doesn't contain main domain %v", authorizedDomains, DomainPresent(main_domain))
 		return nil, errors.New("Authorized domains doesn't contain main domain")
 	}
 

@@ -338,7 +338,7 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 		}
 		keepAlive := state.KeepAlive
 		if state.Err != nil {
-			logrus.Debug("Cid '%v'. Can't read headers: %v", cid, state.Err)
+			logrus.Debugf("Cid '%v'. Can't read headers: %v", cid, state.Err)
 			return
 		}
 		if state.HasContentLength || !state.HasBody {

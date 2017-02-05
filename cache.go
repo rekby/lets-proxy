@@ -36,7 +36,7 @@ func certificateCacheGet(domain string) *tls.Certificate {
 			logrus.Debugf("Got certificate from memory cache for domain %v", DomainPresent(domain))
 			return certP.(*tls.Certificate)
 		} else {
-			logrus.Debugf("Havn't certificate for '%v' in memory cache", domain)
+			logrus.Debugf("Haven't certificate for '%v' in memory cache", domain)
 		}
 	}
 

@@ -696,9 +696,13 @@ func prepare() {
 		*certDir = ""
 	}
 
-	if *keepAliveModeS == KEEPALIVE_NO_BACKEND_STRING {
+	switch *keepAliveModeS {
+	case KEEPALIVE_TRANSPARENT_STRING:
+		keepAliveMode = KEEPALIVE_TRANSPARENT
+	case KEEPALIVE_NO_BACKEND_STRING:
 		keepAliveMode = KEEPALIVE_NO_BACKEND
-	} else {
+	default:
+		logrus.Errorf("Bad keepalive mode: '%v'. Used '%v' instead.", *keepAliveModeS, KEEPALIVE_TRANSPARENT_STRING)
 		keepAliveMode = KEEPALIVE_TRANSPARENT
 	}
 	logrus.Infof("KeepAlive mode: %v", keepAliveMode)

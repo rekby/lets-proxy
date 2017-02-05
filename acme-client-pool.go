@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"crypto"
+	"crypto/tls"
 	"github.com/Sirupsen/logrus"
 	"github.com/hlandau/acme/acmeapi"
+	"net/http"
 	"sync/atomic"
 	"time"
 )
@@ -41,6 +43,15 @@ func (pool *acmeClientPool) Get(ctx context.Context) (*acmeapi.Client, error) {
 	client := &acmeapi.Client{
 		AccountKey:   pool.privateKey,
 		DirectoryURL: pool.serverAddress,
+	}
+	if *acmeSslCheckDisable {
+		client.HTTPClient = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+			},
+		}
 	}
 
 	rulesAcceptNextTime, _ := pool.rulesAcceptNextTime.Load().(time.Time)

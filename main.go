@@ -45,6 +45,7 @@ const (
 var (
 	acmeParallelCount             = flag.Int("acme-parallel", 10, "count of parallel requests for acme server")
 	acmeServerUrl                 = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
+	acmeSslCheckDisable           = flag.Bool("acme-sslcheck-disable", false, "Disable check of acme server certificate.")
 	additionalHeadersParam        = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Several headers separated by comma.")
 	allowIPRefreshInterval        = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often allow ip addresses will be refreshed. Allowable format https://golang.org/pkg/time/#ParseDuration")
 	allowIPsString                = flag.String("allowed-ips", "auto", "allowable ip-addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, it logic can change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to http://ifconfig.io/ip - it need for public ip autodetection behinde nat.")
@@ -815,7 +816,7 @@ func prepare() {
 		acmeService.serverAddress = *acmeServerUrl
 	}
 
-	if *serviceAction=="" {
+	if *serviceAction == "" {
 		if state.PrivateKey == nil {
 			logrus.Info("Generate private keys")
 			state.PrivateKey, err = rsa.GenerateKey(cryptorand.Reader, *privateKeyBits)

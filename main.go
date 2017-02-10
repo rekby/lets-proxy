@@ -48,7 +48,7 @@ var (
 	acmeServerUrl                 = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
 	acmeSslCheckDisable           = flag.Bool("acme-sslcheck-disable", false, "Disable check of ACME server certificate")
 	additionalHeadersParam        = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Separate multiple headers by comma.")
-	allowIPRefreshInterval        = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often allowed ip addresses will be refreshed. Allowable format https://golang.org/pkg/time/#ParseDuration.")
+	allowIPRefreshInterval        = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often ip addresses will be refreshed. Format https://golang.org/pkg/time/#ParseDuration.")
 	allowIPsString                = flag.String("allowed-ips", "auto", "Allowable ip addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, the logic may change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to http://ifconfig.io/ip - it's needed for public ip auto-detection behind NAT.")
 	bindToS                       = flag.String("bind-to", ":443", "List of ports, ip addresses or port:ip separated by comma. For example: 1.1.1.1,2.2.2.2,3.3.3.3:443,4.4.4.4. Ports other then 443 may be used only if tcp-connections proxied from port 443 (iptables,nginx,socat and so on) because Let's Encrypt now checks connections using port 443 only.")
 	blockBadDomainDuration        = flag.Duration("block-bad-domain-duration", time.Hour, "Disable trying to obtain certificate for a domain after error")

@@ -9,7 +9,7 @@ Lets-proxy adds the http headers, `X-Real-IP` which contains the IP address
 of remote client and, `X-Forwarded-Proto=https`, for https detection. It obtains valid TLS certificates from Let's Encrypt and
 handles https for free, in an automated way, including certificate renewal, and without warning in browsers.
 
-Lets-proxy has a tcp mode, which doesn't parse traffic and proxies it as usual tcp connection without modification.
+Lets-proxy has a TCP mode, which doesn't parse traffic and proxies it as usual TCP connection without modification.
 
 The program was created for shared hosting and can handle many thousands of domains per server. It is simple to implement and doesn't need settings to start the program on personal server/vps.
 

@@ -2,15 +2,16 @@
 
 English description
 ===================
-Reverse-proxy server to handle https-requests transparent. By default `lets-proxy` handles
-https requests to port 443 and proxies them as http to port 80 with same IP. It adds http header: X-Real-IP with ip address
-of remote client and X-Forwarded-Proto=https - for https detection. It obtain valid certificates from lets encrypt and
-handle https free, automated and without warning in browsers.
+A reverse-proxy server to handle https requests transparently. By default Lets-proxy handles
+https requests to port 443 and proxies them as http to port 80 on the same IP address.
 
-It has tcp mode, that doesn't parse traffic and proxy it as usual tcp-connection without modify.
+Lets-proxy adds the http headers, `X-Real-IP` which contains the IP address
+of remote client and, `X-Forwarded-Proto=https`, for https detection. It obtains valid TLS certificates from Let's Encrypt and
+handles https for free, in an automated way, including certificate renewal, and without warning in browsers.
 
-The program created for shared hosting and can handle many thouthands domain per server.
-From other side - it simple and doesn't need settings to start program on personal server/vps.
+Lets-proxy has a TCP mode, which doesn't parse traffic and proxies it as usual TCP connection without modification.
+
+The program was created for shared hosting and can handle many thousands of domains per server. It is simple to implement and doesn't need settings to start the program on personal server/vps.
 
 Quick start:
 

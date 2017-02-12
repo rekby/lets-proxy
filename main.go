@@ -10,10 +10,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/Sirupsen/logrus"
-	"github.com/hashicorp/golang-lru"
-	"github.com/kardianos/service"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"io/ioutil"
 	"math"
@@ -27,6 +23,11 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/hashicorp/golang-lru"
+	"github.com/kardianos/service"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 const (
@@ -43,53 +44,53 @@ const (
 )
 
 var (
-	acmeParallelCount             = flag.Int("acme-parallel", 10, "count of parallel requests for acme server")
+	acmeParallelCount             = flag.Int("acme-parallel", 10, "Count of parallel requests for ACME server")
 	acmeServerUrl                 = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
-	acmeSslCheckDisable           = flag.Bool("acme-sslcheck-disable", false, "Disable check of acme server certificate.")
-	additionalHeadersParam        = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Several headers separated by comma.")
-	allowIPRefreshInterval        = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often allow ip addresses will be refreshed. Allowable format https://golang.org/pkg/time/#ParseDuration")
-	allowIPsString                = flag.String("allowed-ips", "auto", "allowable ip-addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, it logic can change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to http://ifconfig.io/ip - it need for public ip autodetection behinde nat.")
-	bindToS                       = flag.String("bind-to", ":443", "List of ports,ip addresses or port:ip separated by comma. For example: 1.1.1.1,2.2.2.2,3.3.3.3:443,4.4.4.4. Ports other then 443 may be used only if tcp-connections proxied from port 443 (iptables,nginx,socat and so on) becouse lets-encrypt now force check connections by 443 port only.")
-	blockBadDomainDuration        = flag.Duration("block-bad-domain-duration", time.Hour, "Disable try obtain certtificate for domain after error")
-	certDir                       = flag.String("cert-dir", "certificates", `Directory for save cached certificates. Set cert-dir=- for disable save certs`)
-	certJsonSave                  = flag.Bool("cert-json", false, "Save json info about certificate near the certificate file with same name with .json extension")
-	connectionIdHeader            = flag.String("connection-id-header", "", "Header name for send connection id to backend in http proxy mode. Default it isn't send.")
-	daemonFlag                    = flag.Bool(DAEMON_KEY_NAME, false, "Start as background daemon. Supported in unix OS only.")
-	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain doesn't available (have zero length). For example client doesn't support SNI. It used for obtain and use certificate only. It isn't forse set header HOST in request.")
-	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind nat.")
-	inMemoryCertCount             = flag.Int("in-memory-cnt", 100, "How many count of certs cache in memory for prevent parse it from file")
+	acmeSslCheckDisable           = flag.Bool("acme-sslcheck-disable", false, "Disable check of ACME server certificate")
+	additionalHeadersParam        = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Separate multiple headers by comma.")
+	allowIPRefreshInterval        = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often ip addresses will be refreshed. Format https://golang.org/pkg/time/#ParseDuration.")
+	allowIPsString                = flag.String("allowed-ips", "auto", "Allowable ip addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, the logic may change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to http://ifconfig.io/ip - it's needed for public ip auto-detection behind NAT.")
+	bindToS                       = flag.String("bind-to", ":443", "List of ports, ip addresses or port:ip separated by comma. For example: 1.1.1.1,2.2.2.2,3.3.3.3:443,4.4.4.4. Ports other then 443 may be used only if tcp-connections proxied from port 443 (iptables,nginx,socat and so on) because Let's Encrypt now checks connections using port 443 only.")
+	blockBadDomainDuration        = flag.Duration("block-bad-domain-duration", time.Hour, "Disable trying to obtain certificate for a domain after error")
+	certDir                       = flag.String("cert-dir", "certificates", `Directory for saved cached certificates. Set cert-dir=- to disable saving of certificates.`)
+	certJsonSave                  = flag.Bool("cert-json", false, "Save JSON information about certificate near the certificate file with same name with .json extension")
+	connectionIdHeader            = flag.String("connection-id-header", "", "Header name used for sending connection id to backend in HTTP proxy mode. Default it isn't send.")
+	daemonFlag                    = flag.Bool(DAEMON_KEY_NAME, false, "Start as background daemon. Supported in Unix OS only.")
+	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain isn't available (has zero length). For example client doesn't support SNI. It is used to obtain a certificate only. It isn't force set header HOST in request.")
+	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind NAT.")
+	inMemoryCertCount             = flag.Int("in-memory-cnt", 100, "How many certificates should be cached in memory, to preveent parsing from file")
 	initOnly                      = flag.Bool("init-only", false, "Exit after initialize, generate self keys. Need for auto-test environment.")
 	keepAliveModeS                = flag.String("keepalive", KEEPALIVE_TRANSPARENT_STRING, KEEPALIVE_TRANSPARENT_STRING+" - keepalive from user to server if both support else doesn't keepalive. "+KEEPALIVE_NO_BACKEND_STRING+" - force doesn't use keepalive connection to backend, but can handle keepalive from user.")
-	keepAliveCustomerTimeout      = flag.Duration("keepalive-customer-timeout", time.Minute*15, "When keepalive in mode '"+KEEPALIVE_NO_BACKEND_STRING+"' - how long time keep customer's connection. In '"+KEEPALIVE_TRANSPARENT_STRING+"' mode timeout don't used and both connection close when one of backend or customer close self connection.")
+	keepAliveCustomerTimeout      = flag.Duration("keepalive-customer-timeout", time.Minute*15, "When keepalive in mode '"+KEEPALIVE_NO_BACKEND_STRING+"' - how long should the connection be maintained. In '"+KEEPALIVE_TRANSPARENT_STRING+"' mode, timeout isn't used and both connections close when either the backend or customer close self connection.")
 	logLevel                      = flag.String("loglevel", "warning", "fatal|error|warning|info|debug")
 	logOutput                     = flag.String("logout", "-", "Path to logout. Special: '-' (without quotes) - stderr")
 	logrotateMaxAge               = flag.Int("logrotate-age", 30, "How many days keep old backups")
-	logrotateMaxCount             = flag.Int("logrotate-count", 30, "How many old backups keep. 0 mean infinite")
-	logrotateMb                   = flag.Int("logrotate-mb", 100, "logrotate by size in megabytes. 0 Mean no logrotate by size.")
-	logrotateTime                 = flag.String("logrotate-time", "", "minutely|hourly|daily|weekly|monthly|yearly|\"\", empty or none mean no logrotate by time. Weekly - rotate log at midnight from sunday to monday")
-	minTLSVersion                 = flag.String("min-tls", "", "Minimul supported tls version: ssl3,tls10,tls11,tls12. Default is golang's default.")
-	noLogStderr                   = flag.Bool("no-log-stderr", false, "supress log to stderr")
-	nonCertDomains                = flag.String("non-cert-domains", "", "No obtain certificate for mathed domains. Regexpes separated by comma.")
-	pidFilePath                   = flag.String("pid-file", "lets-proxy.pid", "Write pid of process. When used --daemon - lock the file for prevent double-start daemon.")
-	preventIDNDecode              = flag.Bool("prevent-idn-decode", false, "Default domain show in log as 'domain.com' or 'xn--d1acufc.xn--p1ai' ('домен.рф'). When option used it will shown as 'domain.com' or 'xn--d1acufc.xn--p1ai', without decode idn domains.")
+	logrotateMaxCount             = flag.Int("logrotate-count", 30, "How many old backups to keep. 0 for keep infinitely.")
+	logrotateMb                   = flag.Int("logrotate-mb", 100, "logrotate by size in megabytes. 0 means log rotation on size is off.")
+	logrotateTime                 = flag.String("logrotate-time", "", "minutely|hourly|daily|weekly|monthly|yearly|\"\", empty or none means no log rotation by time. Weekly - rotate log at midnight from Sunday to Monday")
+	minTLSVersion                 = flag.String("min-tls", "", "Minimum supported TLS version: ssl3,tls10,tls11,tls12. Default is GoLang's default.")
+	noLogStderr                   = flag.Bool("no-log-stderr", false, "Suppress logging to stderr")
+	nonCertDomains                = flag.String("non-cert-domains", "", "Do not obtain certificates for matched domains. Regexpes separated by comma.")
+	pidFilePath                   = flag.String("pid-file", "lets-proxy.pid", "Write pid of process. When used with --daemon, lock the file to prevent starting daemon more than once.")
+	preventIDNDecode              = flag.Bool("prevent-idn-decode", false, "Default domain shows in log as 'domain.com' or 'xn--d1acufc.xn--p1ai' ('домен.рф'). When option used it will show as 'domain.com' or 'xn--d1acufc.xn--p1ai', without decode idn domains.")
 	privateKeyBits                = flag.Int("private-key-len", 2048, "Length of private keys in bits")
 	profilerBindAddress           = flag.String("profiler-bind", "", "Address for get of profiler dump by http. Profiler disable if empty.")
 	profilerPassword              = flag.String("profiler-password", "", "Password for get access to profiler info. Profiler disable if empty. Usage go tool pprof http://<Addr>/debug/pprof/...?password=<password>. For example: http://127.0.0.1:3123/debug/pprof/heap?password=123")
-	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after tls handle (http|tcp).")
-	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. It can be few headers, separated by comma.")
-	runAs                         = flag.String("runas", "", "Run as other user. It work only for --daemon, only for unix and require to run from specified user or root. It can be user login or user id. It change default work dir to home folder of the user (can be changed by explicit --"+WORKING_DIR_ARG_NAME+"). Run will fail if use the option without --daemon.")
-	serviceAction                 = flag.String("service-action", "", "start,stop,install,uninstall,reinstall")
-	serviceName                   = flag.String("service-name", SERVICE_NAME_EXAMPLE, "service name, need for service actions")
-	stateFilePath                 = flag.String("state-file", "state.json", "Path to save some state data, for example account key")
-	subdomainsUnionS              = flag.String("subdomains-union", "www", "Comma-separated subdomains which try to obtain certificates with common domain name. For example if received request to domain.com it try obtain certificate for www.domain.com and domain.com same time and save them in one cert - as domain.com. Change option on working copy of program will need to obtain new certificates while request to added/removed subdomains.")
-	targetConnString              = flag.String("target", ":80", "IP, :port or IP:port. Default port is 80. Default IP - same which receive connection.")
-	mapTargetS                    = flag.String("target-map", "", "Remap target for some received ip:port. It write if from receiveIP[:receivePort]=targetIP[:targetPort]. It ca comtains few map,separated by comma. Example: --map=1.2.3.10=127.0.0.1,1.2.3.11=127.0.0.2:8999")
+	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after TLS handled (http|tcp).")
+	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. Multiple headers are separated with a comma.")
+	runAs                         = flag.String("runas", "", "Run as a different user. This works only for --daemon, and only for Unix and requires to run from specified user or root. It can be user login or user id. It also changes default work dir to home folder of the user (can be changed by explicit --"+WORKING_DIR_ARG_NAME+"). Run will fail if use this option without --daemon.")
+	serviceAction                 = flag.String("service-action", "", "Start, stop, install, uninstall, reinstall")
+	serviceName                   = flag.String("service-name", SERVICE_NAME_EXAMPLE, "Service name is required for service actions")
+	stateFilePath                 = flag.String("state-file", "state.json", "Filename and path to which we save some state data. For example account key.")
+	subdomainsUnionS              = flag.String("subdomains-union", "www", "Comma-separated subdomains for which we try to obtain certificate on a single domain name. For example, if we receive a request to domain.com we try to obtain certificate valid for both www.domain.com and domain.com at same time, and save them in one certificate named domain.com. Changing option on running program will require that new certificates be obtained for added/removed subdomains.")
+	targetConnString              = flag.String("target", ":80", "IP, :port or IP:port. Default port is 80. Default IP is the ip address which receives the connection.")
+	mapTargetS                    = flag.String("target-map", "", "Remap target for some received ip:port. Format is receiveIP[:receivePort]=targetIP[:targetPort]. Can pass multiple remap rules, separated by comma. Format is --map=1.2.3.10=127.0.0.1,1.2.3.11=127.0.0.2:8999")
 	targetConnTimeout             = flag.Duration("target-conn-timeout", time.Second, "")
-	tcpKeepAliveInterval          = flag.Duration("tcp-keepalive-interval", time.Minute, "Interval between send tcp keepalive packages detect dead connections")
-	acmeTestServer                = flag.Bool("test", false, "Use test lets encrypt server instead of <acme-server>")
-	timeToRenew                   = flag.Duration("time-to-renew", time.Hour*24*30, "Time to end of certificate for background renew.")
-	versionPrint                  = flag.Bool("version", false, "print version and exit.")
-	workingDir                    = flag.String(WORKING_DIR_ARG_NAME, "", "Set working dir")
+	tcpKeepAliveInterval          = flag.Duration("tcp-keepalive-interval", time.Minute, "Interval between send TCP keepalive packages detect dead connections")
+	acmeTestServer                = flag.Bool("test", false, "Use test Let's Encrypt server instead of <acme-server>")
+	timeToRenew                   = flag.Duration("time-to-renew", time.Hour*24*30, "Time to end of certificate for background renewal")
+	versionPrint                  = flag.Bool("version", false, "Print version and exit")
+	workingDir                    = flag.String(WORKING_DIR_ARG_NAME, "", "Set working directory")
 )
 
 var (

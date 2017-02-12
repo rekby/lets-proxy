@@ -74,6 +74,8 @@ var (
 	pidFilePath                   = flag.String("pid-file", "lets-proxy.pid", "Write pid of process. When used with --daemon, lock the file to prevent starting daemon more than once.")
 	preventIDNDecode              = flag.Bool("prevent-idn-decode", false, "Default domain shows in log as 'domain.com' or 'xn--d1acufc.xn--p1ai' ('домен.рф'). When option used it will show as 'domain.com' or 'xn--d1acufc.xn--p1ai', without decode idn domains.")
 	privateKeyBits                = flag.Int("private-key-len", 2048, "Length of private keys in bits")
+	profilerBindAddress           = flag.String("profiler-bind", "", "Address for get of profiler dump by http. Profiler disable if empty.")
+	profilerPassword              = flag.String("profiler-password", "", "Password for get access to profiler info. Profiler disable if empty. Usage go tool pprof http://<Addr>/debug/pprof/...?password=<password>. For example: http://127.0.0.1:3123/debug/pprof/heap?password=123")
 	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after TLS handled (http|tcp).")
 	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. Multiple headers are separated with a comma.")
 	runAs                         = flag.String("runas", "", "Run as a different user. This works only for --daemon, and only for Unix and requires to run from specified user or root. It can be user login or user id. It also changes default work dir to home folder of the user (can be changed by explicit --"+WORKING_DIR_ARG_NAME+"). Run will fail if use this option without --daemon.")
@@ -230,6 +232,13 @@ func main() {
 	prepare()
 	if *initOnly {
 		return
+	}
+
+	// profiler
+	if *profilerBindAddress != "" && *profilerPassword != "" {
+		go startProfiler()
+	} else {
+		logrus.Info("Profiler disabled")
 	}
 
 	go signalWorker()

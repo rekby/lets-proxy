@@ -25,7 +25,8 @@ Disallow: /`))
 	profilerServer.Handler = profilerMux
 	profilerServer.Addr = *profilerBindAddress
 	logrus.Infof("Start profiler with bind to: '%v'", profilerServer.Addr)
-	profilerServer.ListenAndServe()
+	err := profilerServer.ListenAndServe()
+	logrus.Errorf("Can't start profiler: %v", err)
 }
 
 func (h CheckProfilerAccessHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request){

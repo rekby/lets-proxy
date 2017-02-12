@@ -260,7 +260,11 @@ func main() {
 	program := &letsService{}
 	s, err := service.New(program, svcConfig)
 	if err != nil {
-		logrus.Error("Can't init service", err)
+		if runtime.GOOS == "freebsd" && err == service.ErrNoServiceSystemDetected {
+			logrus.Info("Service actions don't support for freebsd")
+		} else {
+			logrus.Error("Can't init service: ", err)
+		}
 	}
 	if err == nil && !service.Interactive() {
 		s.Run()

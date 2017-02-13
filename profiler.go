@@ -47,6 +47,7 @@ func (h CheckProfilerAccessHandler) ServeHTTP(resp http.ResponseWriter, req *htt
 		h(resp, req)
 	} else {
 		resp.WriteHeader(403)
+		resp.Header().Add("Content-length", "14") // "Access denied."
 		resp.Write([]byte("Access denied."))
 	}
 }

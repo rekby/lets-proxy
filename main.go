@@ -25,11 +25,12 @@ import (
 	"time"
 
 	"bufio"
+	"sort"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/golang-lru"
 	"github.com/kardianos/service"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"sort"
 )
 
 const (
@@ -92,8 +93,8 @@ var (
 	acmeTestServer                = flag.Bool("test", false, "Use test Let's Encrypt server instead of <acme-server>")
 	timeToRenew                   = flag.Duration("time-to-renew", time.Hour*24*30, "Time to end of certificate for background renewal")
 	versionPrint                  = flag.Bool("version", false, "Print version and exit")
-	whiteList                     = flag.String("whilelist-domains", "", "Allow request certificate for the domains without any check by non-cert-domains. It need list all domains including subdomains (for example domain.com,www.domain.com)")
-	whiteListFile                 = flag.String("whilelist-domains-file", "", "Same as --whilelist-domains but domains read from file. One domain per line. File may update without restart lets-proxy")
+	whiteList                     = flag.String("whitelist-domains", "", "Allow request certificate for the domains without any check by non-cert-domains. It need list all domains including subdomains (for example domain.com,www.domain.com)")
+	whiteListFile                 = flag.String("whitelist-domains-file", "", "Same as --whitelist-domains but domains read from file. One domain per line. File may update without restarting lets-proxy")
 	workingDir                    = flag.String(WORKING_DIR_ARG_NAME, "", "Set working directory")
 )
 

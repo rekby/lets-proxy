@@ -567,6 +567,10 @@ forRegexpCheckDomain:
 				if stringsSortedContains(domainsToObtain, whiteListDomain) && !stringsSortedContains(allowedDomains, whiteListDomain) {
 					logrus.Debugf("Add domain from file whitelist: %v\n", whiteListDomain)
 					allowedDomains = stringsSortedAppend(allowedDomains, whiteListDomain)
+					if len(allowedDomains) == len(domainsToObtain) {
+						// don't read file to end if all domain allowed already
+						return
+					}
 				}
 			}
 		}()

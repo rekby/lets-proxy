@@ -7,5 +7,6 @@ lets-proxy.iml
 state.json
 certificates/
 log.txt
+whitelist.txt
 
 lets-proxy

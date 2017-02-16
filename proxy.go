@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/Sirupsen/logrus"
 	"io"
 	"net"
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/Sirupsen/logrus"
 )
 
 const (
@@ -40,9 +39,7 @@ var (
 	HEAD_CONNECTION       = []byte("CONNECTION")
 	HEAD_CONNECTION_CLOSE = []byte("CLOSE")
 	HEAD_CONTENT_LENGTH   = []byte("CONTENT-LENGTH")
-	HEAD_HTTP_            = []byte("HTTP/")
 	HEAD_HTTP_1_1         = []byte("HTTP/1.1")
-	HEAD_HEAD             = []byte("HEAD")
 
 	// https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol#Summary_table
 	HTTP_METHOD_WITHOUT_BODY = [][]byte{[]byte("GET"), []byte("HEAD"), []byte("DELETE"), []byte("TRACE")}
@@ -93,7 +90,6 @@ type proxyHTTPHeadersRes struct {
 	HasContentLength bool
 	HasBody          bool
 	Err              error
-	isMethodHead     bool
 }
 
 func proxyHTTPHeaders(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn, proxyKeepAliveMode int) (
@@ -136,15 +132,6 @@ readHeaderLines:
 
 		if isFirstLine {
 			isFirstLine = false
-			spaceIndex := bytes.IndexByte(headerStart, ' ')
-
-			var method []byte
-			if spaceIndex > 0 {
-				method = headerStart[:spaceIndex]
-			}
-
-			res.isMethodHead = bytes.Equal(method, HEAD_HEAD)
-
 			lastIndex := len(headerStart) - 1
 			for lastIndex > 0 && headerStart[lastIndex] == '\r' || headerStart[lastIndex] == '\n' {
 				lastIndex--
@@ -166,10 +153,11 @@ readHeaderLines:
 		}
 
 		headerName := headerStart[:len(headerStart)-1] // Cut trailing colon from start
+		headerNameUpperCase := bytes.ToUpper(headerName)
 
 		skipHeader := false
 		for _, ownHeader := range cutHeaders {
-			if bytes.EqualFold(ownHeader, headerName) {
+			if bytes.Equal(ownHeader, headerNameUpperCase) {
 				skipHeader = true
 				break
 			}
@@ -179,15 +167,15 @@ readHeaderLines:
 		case PROXY_KEEPALIVE_NOTHING:
 			// pass
 		case PROXY_KEEPALIVE_DROP:
-			skipHeader = skipHeader || bytes.EqualFold(headerName, HEAD_CONNECTION)
+			skipHeader = skipHeader || bytes.Equal(headerNameUpperCase, HEAD_CONNECTION)
 		case PROXY_KEEPALIVE_FORCE:
-			skipHeader = skipHeader || bytes.EqualFold(headerName, HEAD_CONNECTION)
+			skipHeader = skipHeader || bytes.Equal(headerNameUpperCase, HEAD_CONNECTION)
 		default:
 			panic("Unknow proxyKeepAliveMode")
 		}
 
 		if skipHeader {
-			logrus.Debugf("Skip header: '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName)
+			logrus.Debugf("Skip header: '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerNameUpperCase)
 		} else {
 			logrus.Debugf("Copy header: '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName)
 
@@ -200,7 +188,7 @@ readHeaderLines:
 
 		var headerContent *bytes.Buffer
 
-		needHeaderContent := bytes.EqualFold(headerName, HEAD_CONTENT_LENGTH) || bytes.EqualFold(headerName, HEAD_CONNECTION)
+		needHeaderContent := bytes.Equal(headerNameUpperCase, HEAD_CONTENT_LENGTH) || bytes.Equal(headerNameUpperCase, HEAD_CONNECTION)
 		if needHeaderContent {
 			headerContent = bytes.NewBuffer(buf[1:])
 			headerContent.Reset()
@@ -231,10 +219,10 @@ readHeaderLines:
 		}
 		if needHeaderContent {
 			switch {
-			case bytes.EqualFold(headerName, HEAD_CONNECTION):
+			case bytes.Equal(headerNameUpperCase, HEAD_CONNECTION):
 				res.KeepAlive = !bytes.EqualFold(HEAD_CONNECTION_CLOSE, bytes.TrimSpace(headerContent.Bytes()))
 
-			case bytes.EqualFold(headerName, HEAD_CONTENT_LENGTH):
+			case bytes.Equal(headerNameUpperCase, HEAD_CONTENT_LENGTH):
 				res.ContentLength, res.Err = strconv.ParseInt(string(bytes.TrimSpace(headerContent.Bytes())), 10, 64)
 				if res.Err == nil {
 					res.HasContentLength = true
@@ -247,7 +235,7 @@ readHeaderLines:
 
 			default:
 				logrus.Debugf("ERROR. Unknow why i need header content. Code error. From '%v' to '%v' cid '%v', header name '%s'",
-					sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName,
+					sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerNameUpperCase,
 				)
 			}
 		}

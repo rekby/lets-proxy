@@ -106,7 +106,7 @@ readHeaderLines:
 	for {
 		var i int
 		var headerStart []byte
-		for i = 0; i < len(buf); i++ {
+		for i = 1; i < len(buf); i++ {
 			var readBytes int
 			readBytes, res.Err = sourceConn.Read(buf[i : i+1])
 			totalReadBytes += readBytes
@@ -119,7 +119,7 @@ readHeaderLines:
 				return
 			}
 			if buf[i] == ':' || buf[i] == '\n' {
-				headerStart = buf[:i+1]
+				headerStart = buf[1:i+1]
 				logrus.Debugf("Header Name '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, buf[:i])
 				break
 			}
@@ -153,11 +153,10 @@ readHeaderLines:
 		}
 
 		headerName := headerStart[:len(headerStart)-1] // Cut trailing colon from start
-		headerNameUpperCase := bytes.ToUpper(headerName)
 
 		skipHeader := false
 		for _, ownHeader := range cutHeaders {
-			if bytes.Equal(ownHeader, headerNameUpperCase) {
+			if bytes.EqualFold(ownHeader, headerName) {
 				skipHeader = true
 				break
 			}
@@ -167,15 +166,15 @@ readHeaderLines:
 		case PROXY_KEEPALIVE_NOTHING:
 			// pass
 		case PROXY_KEEPALIVE_DROP:
-			skipHeader = skipHeader || bytes.Equal(headerNameUpperCase, HEAD_CONNECTION)
+			skipHeader = skipHeader || bytes.EqualFold(headerName, HEAD_CONNECTION)
 		case PROXY_KEEPALIVE_FORCE:
-			skipHeader = skipHeader || bytes.Equal(headerNameUpperCase, HEAD_CONNECTION)
+			skipHeader = skipHeader || bytes.EqualFold(headerName, HEAD_CONNECTION)
 		default:
 			panic("Unknow proxyKeepAliveMode")
 		}
 
 		if skipHeader {
-			logrus.Debugf("Skip header: '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerNameUpperCase)
+			logrus.Debugf("Skip header: '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName)
 		} else {
 			logrus.Debugf("Copy header: '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName)
 
@@ -186,14 +185,12 @@ readHeaderLines:
 			}
 		}
 
-		var headerContent *bytes.Buffer
+		headerContent := bytes.NewBuffer(buf[1 + len(headerStart):])
+		headerContent.Reset()
 
-		needHeaderContent := bytes.Equal(headerNameUpperCase, HEAD_CONTENT_LENGTH) || bytes.Equal(headerNameUpperCase, HEAD_CONNECTION)
-		if needHeaderContent {
-			headerContent = bytes.NewBuffer(buf[1:])
-			headerContent.Reset()
-		}
+		needHeaderContent := bytes.EqualFold(headerName, HEAD_CONTENT_LENGTH) || bytes.EqualFold(headerName, HEAD_CONNECTION)
 
+		buf[0] = 0
 		for buf[0] != '\n' {
 			var readBytes int
 			readBytes, res.Err = sourceConn.Read(buf[:1])
@@ -219,10 +216,10 @@ readHeaderLines:
 		}
 		if needHeaderContent {
 			switch {
-			case bytes.Equal(headerNameUpperCase, HEAD_CONNECTION):
+			case bytes.EqualFold(headerName, HEAD_CONNECTION):
 				res.KeepAlive = !bytes.EqualFold(HEAD_CONNECTION_CLOSE, bytes.TrimSpace(headerContent.Bytes()))
 
-			case bytes.Equal(headerNameUpperCase, HEAD_CONTENT_LENGTH):
+			case bytes.EqualFold(headerName, HEAD_CONTENT_LENGTH):
 				res.ContentLength, res.Err = strconv.ParseInt(string(bytes.TrimSpace(headerContent.Bytes())), 10, 64)
 				if res.Err == nil {
 					res.HasContentLength = true
@@ -235,7 +232,7 @@ readHeaderLines:
 
 			default:
 				logrus.Debugf("ERROR. Unknow why i need header content. Code error. From '%v' to '%v' cid '%v', header name '%s'",
-					sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerNameUpperCase,
+					sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName,
 				)
 			}
 		}

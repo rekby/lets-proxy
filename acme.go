@@ -252,7 +252,7 @@ func (this *acmeStruct) CreateCertificate(ctx context.Context, domains []string,
 	if len(domainsForCert) == 0 {
 		return nil, errors.New("Domains is bad by self-check")
 	}
-	if main_domain != "" && !containString(domainsForCert, main_domain) {
+	if main_domain != "" && !stringsContains(domainsForCert, main_domain) {
 		return nil, errors.New("Main domain doesn't allowed by domainsCheck")
 	}
 
@@ -293,7 +293,7 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 	for domain := range authorizedDomainsChan {
 		authorizedDomains = append(authorizedDomains, domain)
 	}
-	if main_domain != "" && !containString(authorizedDomains, main_domain) {
+	if main_domain != "" && !stringsContains(authorizedDomains, main_domain) {
 		logrus.Infof("Authorized domains '%v' doesn't contain main domain %v", authorizedDomains, DomainPresent(main_domain))
 		return nil, errors.New("Authorized domains doesn't contain main domain")
 	}

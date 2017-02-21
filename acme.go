@@ -13,12 +13,13 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
-	"github.com/Sirupsen/logrus"
-	"github.com/hlandau/acme/acmeapi"
-	"github.com/hlandau/acme/acmeapi/acmeutils"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/hlandau/acme/acmeapi"
+	"github.com/hlandau/acme/acmeapi/acmeutils"
 )
 
 const (

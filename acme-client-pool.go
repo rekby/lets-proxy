@@ -4,11 +4,12 @@ import (
 	"context"
 	"crypto"
 	"crypto/tls"
-	"github.com/Sirupsen/logrus"
-	"github.com/hlandau/acme/acmeapi"
 	"net/http"
 	"sync/atomic"
 	"time"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/hlandau/acme/acmeapi"
 )
 
 const (

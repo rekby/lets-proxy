@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"errors"
-	"github.com/Sirupsen/logrus"
-	"github.com/miekg/dns"
 	"net"
 	"strings"
 	"sync"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/miekg/dns"
 )
 
 var (

@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/Sirupsen/logrus"
 	"io"
 	"net"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/Sirupsen/logrus"
 )
 
 const (
@@ -119,7 +120,7 @@ readHeaderLines:
 				return
 			}
 			if buf[i] == ':' || buf[i] == '\n' {
-				headerStart = buf[1:i+1]
+				headerStart = buf[1 : i+1]
 				logrus.Debugf("Header Name '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, buf[:i])
 				break
 			}
@@ -185,7 +186,7 @@ readHeaderLines:
 			}
 		}
 
-		headerContent := bytes.NewBuffer(buf[1 + len(headerStart):])
+		headerContent := bytes.NewBuffer(buf[1+len(headerStart):])
 		headerContent.Reset()
 
 		needHeaderContent := bytes.EqualFold(headerName, HEAD_CONTENT_LENGTH) || bytes.EqualFold(headerName, HEAD_CONNECTION)

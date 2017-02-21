@@ -16,4 +16,3 @@ func (encoded DomainPresent) String() string {
 		return "'" + encodedS + "' ('" + unpuny + "')"
 	}
 }
-

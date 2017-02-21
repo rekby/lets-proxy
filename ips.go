@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"github.com/Sirupsen/logrus"
+	"flag"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -11,7 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"flag"
+
+	"github.com/Sirupsen/logrus"
 )
 
 type ipSlice []net.IP
@@ -34,9 +35,9 @@ var (
 	needUpdateAllowedIpList = false
 
 	globalAllowedIPs               atomic.Value
-	globalAllowedIPsMutex           = sync.Mutex{}
+	globalAllowedIPsMutex          = sync.Mutex{}
 	globalAllowedIPsNextUpdateTime atomic.Value
-	localIPNetworks                  = []net.IPNet{ // additional filter to ip.IsGlobalUnicast, issue https://github.com/golang/go/issues/11772
+	localIPNetworks                = []net.IPNet{ // additional filter to ip.IsGlobalUnicast, issue https://github.com/golang/go/issues/11772
 		parseNet("10.0.0.0/8"),
 		parseNet("172.16.0.0/12"),
 		parseNet("192.168.0.0/16"),
@@ -56,12 +57,12 @@ func getAllowIPs() ipSlice {
 		return res
 	}
 
-	if nextUpdateTime, ok := globalAllowedIPsNextUpdateTime.Load().(time.Time); !ok || nextUpdateTime.Before(time.Now()){
+	if nextUpdateTime, ok := globalAllowedIPsNextUpdateTime.Load().(time.Time); !ok || nextUpdateTime.Before(time.Now()) {
 		globalAllowedIPsMutex.Lock()
 		defer globalAllowedIPsMutex.Unlock()
 
 		// second check after get mutex. It can be updated in other thread
-		if nextUpdateTime, ok := globalAllowedIPsNextUpdateTime.Load().(time.Time); !ok || nextUpdateTime.Before(time.Now()){
+		if nextUpdateTime, ok := globalAllowedIPsNextUpdateTime.Load().(time.Time); !ok || nextUpdateTime.Before(time.Now()) {
 			res := forceReadAllowedIPs()
 			logrus.Infof("Update allowed ips to: %v", res)
 			globalAllowedIPs.Store(res)

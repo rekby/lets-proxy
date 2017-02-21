@@ -1,18 +1,18 @@
 package main
 
 import (
-	"testing"
 	"net"
 	"sort"
+	"testing"
 )
 
-func TestCompareIPs(t *testing.T){
-	if -1 != ipCompare(net.ParseIP("127.0.0.1"), net.ParseIP("::1")){
+func TestCompareIPs(t *testing.T) {
+	if -1 != ipCompare(net.ParseIP("127.0.0.1"), net.ParseIP("::1")) {
 		t.Error(ipCompare(net.ParseIP("127.0.0.1"), net.ParseIP("::1")))
 	}
 }
 
-func TestIPContains(t *testing.T){
+func TestIPContains(t *testing.T) {
 	var slice ipSlice
 
 	slice = []net.IP{}

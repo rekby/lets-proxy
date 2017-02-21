@@ -3,19 +3,20 @@ package main
 import (
 	"net/http"
 	"net/http/pprof"
+
 	"github.com/Sirupsen/logrus"
 )
 
 type CheckProfilerAccessHandler http.HandlerFunc
 
-func startProfiler(){
+func startProfiler() {
 	profilerMux := &http.ServeMux{}
 	profilerMux.Handle("/debug/pprof/", CheckProfilerAccessHandler(pprof.Index))
 	//profilerMux.Handle("/debug/pprof/cmdline", CheckProfilerAccessHandler(pprof.Cmdline))
 	profilerMux.Handle("/debug/pprof/profile", CheckProfilerAccessHandler(pprof.Profile))
 	profilerMux.Handle("/debug/pprof/symbol", CheckProfilerAccessHandler(pprof.Symbol))
 	profilerMux.Handle("/debug/pprof/trace", CheckProfilerAccessHandler(pprof.Trace))
-	profilerMux.HandleFunc("/robots.txt", func(resp http.ResponseWriter, r *http.Request){
+	profilerMux.HandleFunc("/robots.txt", func(resp http.ResponseWriter, r *http.Request) {
 		resp.Write([]byte(`User-agent: *
 Disallow: /`))
 	})
@@ -29,7 +30,7 @@ Disallow: /`))
 	logrus.Errorf("Can't start profiler: %v", err)
 }
 
-func (h CheckProfilerAccessHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request){
+func (h CheckProfilerAccessHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	password := req.FormValue("password")
 	var cPassword string
 	cookie, _ := req.Cookie("password")
@@ -40,8 +41,8 @@ func (h CheckProfilerAccessHandler) ServeHTTP(resp http.ResponseWriter, req *htt
 		if cPassword == "" {
 			cookie := &http.Cookie{}
 			cookie.Path = "/debug/pprof/"
-			cookie.Name="password"
-			cookie.Value=*profilerPassword
+			cookie.Name = "password"
+			cookie.Value = *profilerPassword
 			http.SetCookie(resp, cookie)
 		}
 		h(resp, req)

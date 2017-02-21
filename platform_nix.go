@@ -6,13 +6,14 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"github.com/Sirupsen/logrus"
-	"github.com/sevlyar/go-daemon"
 	"os"
+	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
-	"path/filepath"
-	"os/signal"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/sevlyar/go-daemon"
 )
 
 type User struct {
@@ -24,7 +25,7 @@ type User struct {
 
 var (
 	daemonContext *daemon.Context // need global var for prevent close (and unlock) pid-file
-	osSignals = make(chan os.Signal, 1)
+	osSignals     = make(chan os.Signal, 1)
 )
 
 // return true if it is child process
@@ -78,7 +79,7 @@ func daemonize() bool {
 			if !filepath.IsAbs(logFilePath) && daemonContext.WorkDir != "" {
 				logFilePath = filepath.Join(daemonContext.WorkDir, logFilePath)
 			}
-			logFile, _ := os.OpenFile(logFilePath, os.O_CREATE | os.O_WRONLY | os.O_APPEND, DEFAULT_FILE_MODE)
+			logFile, _ := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, DEFAULT_FILE_MODE)
 			if logFile != nil {
 				logFile.WriteString("Start with uid 0 instead runas\n")
 				logFile.Close()
@@ -167,8 +168,7 @@ func parseUint32(s string) (uint32, error) {
 	}
 }
 
-
-func signalWorker(){
+func signalWorker() {
 	signal.Notify(osSignals, syscall.SIGHUP)
 
 	for s := range osSignals {

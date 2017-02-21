@@ -7,12 +7,13 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	"github.com/Sirupsen/logrus"
-	"github.com/hashicorp/golang-lru"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -21,7 +22,7 @@ var (
 	PRIVATE_KEY_FILEMODE os.FileMode = 0600
 )
 
-func certificateCacheFlushMem(){
+func certificateCacheFlushMem() {
 	if certMemCache != nil {
 		logrus.Debug("Flush memory cache certificates")
 		certMemCache.Purge()

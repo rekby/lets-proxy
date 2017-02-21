@@ -3,9 +3,10 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/rekby/pair-connections"
 	"io/ioutil"
 	"testing"
+
+	"github.com/rekby/pair-connections"
 )
 
 func TestProxyHttpHeaders(t *testing.T) {
@@ -55,7 +56,6 @@ func TestProxyHttpHeaders(t *testing.T) {
 		}
 	}
 
-
 	buf := &bytes.Buffer{}
 	buf.WriteString("GET /test HTTP/1.0\r\n")
 	buf.WriteString("HOST: www.asd.com\r\n")
@@ -68,7 +68,6 @@ func TestProxyHttpHeaders(t *testing.T) {
 	needBuf.WriteString("\r\n")
 	test(PROXY_KEEPALIVE_NOTHING, buf.Bytes(), needBuf.Bytes(),
 		proxyHTTPHeadersRes{KeepAlive: false, ContentLength: 0, HasContentLength: false, Err: nil})
-
 
 	buf = &bytes.Buffer{}
 	buf.WriteString("GET /test HTTP/1.0\r\n")
@@ -146,7 +145,6 @@ func TestProxyHttpHeaders(t *testing.T) {
 	needBuf.WriteString("\r\n")
 	test(PROXY_KEEPALIVE_NOTHING, buf.Bytes(), needBuf.Bytes(),
 		proxyHTTPHeadersRes{KeepAlive: false, ContentLength: 0, HasContentLength: true, Err: nil})
-
 
 	buf = &bytes.Buffer{}
 	buf.WriteString("GET /test HTTP/1.1\r\n")

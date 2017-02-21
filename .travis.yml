@@ -1,6 +1,6 @@
 language: go
 go:
-  - 1.7
+  - 1.8
 gobuild_args: --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\""
 
 script: echo "Deploy only, tested on own gitlab becouse travis incoming connect restrictions."
@@ -30,7 +30,6 @@ deploy:
   on:
     repo: rekby/lets-proxy
     tags: true
-  go: 1.7
   api_key: $GITHUB_TOKEN
   file:
     - "release/lets-proxy-linux-i386.tar.gz"

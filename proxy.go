@@ -37,13 +37,17 @@ var (
 
 // var-constants
 var (
-	HEAD_CONNECTION       = []byte("CONNECTION")
-	HEAD_CONNECTION_CLOSE = []byte("CLOSE")
-	HEAD_CONTENT_LENGTH   = []byte("CONTENT-LENGTH")
-	HEAD_HTTP_1_1         = []byte("HTTP/1.1")
+	HEAD_CONNECTION         = []byte("CONNECTION")
+	HEAD_CONNECTION_CLOSE   = []byte("CLOSE")
+	HEAD_CONTENT_LENGTH     = []byte("CONTENT-LENGTH")
+	HEAD_HTTP_1_1           = []byte("HTTP/1.1")
+	HEAD_HEAD_METHOD_PREFIX = []byte("HEAD ")
+	STATUS_LINE_PREFIX      = []byte("HTTP/1.")
 
 	// https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol#Summary_table
-	HTTP_METHOD_WITHOUT_BODY = [][]byte{[]byte("GET"), []byte("HEAD"), []byte("DELETE"), []byte("TRACE")}
+	HTTP_METHOD_WITHOUT_BODY_PREFIXES = [][]byte{[]byte("GET "), []byte("HEAD "), []byte("DELETE "), []byte("TRACE ")}
+
+	STATUS_CODES_WITHOUT_BODY = [][]byte{[]byte("1"), []byte("204"), []byte("304")}
 )
 
 func connectTo(cid ConnectionID, targetAddr net.TCPAddr) (conn *net.TCPConn, err error) {
@@ -91,6 +95,7 @@ type proxyHTTPHeadersRes struct {
 	HasContentLength bool
 	HasBody          bool
 	Err              error
+	IsHeadMethod     bool
 }
 
 func proxyHTTPHeaders(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn, proxyKeepAliveMode int) (
@@ -133,17 +138,42 @@ readHeaderLines:
 
 		if isFirstLine {
 			isFirstLine = false
+
 			lastIndex := len(headerStart) - 1
 			for lastIndex > 0 && headerStart[lastIndex] == '\r' || headerStart[lastIndex] == '\n' {
 				lastIndex--
 			}
 			trimmedHeader := headerStart[:lastIndex+1]
-			if bytes.HasSuffix(trimmedHeader, HEAD_HTTP_1_1) {
-				res.KeepAlive = true
-			}
-			for _, testMethod := range HTTP_METHOD_WITHOUT_BODY {
-				if len(headerStart) > len(testMethod) && bytes.EqualFold(testMethod, headerStart[:len(testMethod)]) {
-					res.HasBody = false
+			if bytes.HasPrefix(trimmedHeader, STATUS_LINE_PREFIX) {
+				// Response
+				statusLine := trimmedHeader
+				if bytes.HasPrefix(statusLine, HEAD_HTTP_1_1) {
+					res.KeepAlive = true
+				}
+
+				var statusCode []byte
+				if statusCodeIndex := bytes.IndexByte(statusLine, ' '); statusCodeIndex >= 0 {
+					statusCode = statusLine[statusCodeIndex+1 : statusCodeIndex+1+3] // 3 digit
+				}
+				for _, statusCodeWithoutBody := range STATUS_CODES_WITHOUT_BODY {
+					if bytes.HasPrefix(statusCode, statusCodeWithoutBody) {
+						res.HasBody = false
+					}
+				}
+			} else {
+				// request
+				requestLine := trimmedHeader
+				if bytes.HasSuffix(requestLine, HEAD_HTTP_1_1) {
+					res.KeepAlive = true
+				}
+				if bytes.HasPrefix(requestLine, HEAD_HEAD_METHOD_PREFIX) {
+					res.IsHeadMethod = true
+				}
+
+				for _, testMethod := range HTTP_METHOD_WITHOUT_BODY_PREFIXES {
+					if bytes.HasPrefix(requestLine, testMethod) {
+						res.HasBody = false
+					}
 				}
 			}
 		}
@@ -361,10 +391,12 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			keepAlive = keepAlive && answerState.KeepAlive
 			var reader io.Reader
 
-			if answerState.HasContentLength {
-				reader = io.LimitReader(backendConn, answerState.ContentLength)
-			} else {
-				reader = backendConn
+			if answerState.HasBody && !state.IsHeadMethod {
+				if answerState.HasContentLength {
+					reader = io.LimitReader(backendConn, answerState.ContentLength)
+				} else {
+					reader = backendConn
+				}
 			}
 
 			_, err = io.CopyBuffer(customerConn, reader, buf)

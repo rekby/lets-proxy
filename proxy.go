@@ -32,6 +32,7 @@ const (
 var (
 	poolNetBuffers sync.Pool
 	keepAliveMode  KeepAliveModeType
+	zeroTime       = time.Time{}
 )
 
 // var-constants
@@ -472,17 +473,14 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 		proxyKeepAliveModeToBackend := PROXY_KEEPALIVE_NOTHING
 		proxyKeepAliveModeToCustomer := PROXY_KEEPALIVE_NOTHING
 		if keepAliveMode == KEEPALIVE_NO_BACKEND {
-
-			customerConn.SetReadDeadline(time.Now().Add(*keepAliveCustomerTimeout))
 			proxyKeepAliveModeToBackend = PROXY_KEEPALIVE_DROP
 			proxyKeepAliveModeToCustomer = PROXY_KEEPALIVE_FORCE
 		}
 		logrus.Debugf("Cid '%v'. Start proxy request", cid)
+		customerConn.SetReadDeadline(time.Now().Add(*keepAliveCustomerTimeout))
 		requestHeadersRes := proxyHTTPHeaders(cid, backendConn, customerConn, proxyKeepAliveModeToBackend)
-		if keepAliveMode == KEEPALIVE_NO_BACKEND {
-			// Current not timeout during proxy request.
-			customerConn.SetReadDeadline(time.Time{})
-		}
+		customerConn.SetReadDeadline(time.Now().Add(*maxRequestTime))
+
 		if requestHeadersRes.Err != nil {
 			logrus.Debugf("Cid '%v'. Can't read headers: %v", cid, requestHeadersRes.Err)
 			return

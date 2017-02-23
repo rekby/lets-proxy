@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"strconv"
@@ -43,6 +42,8 @@ var (
 	HEAD_HTTP_1_1           = []byte("HTTP/1.1")
 	HEAD_HEAD_METHOD_PREFIX = []byte("HEAD ")
 	STATUS_LINE_PREFIX      = []byte("HTTP/1.")
+	TRANSFER_ENCODING       = []byte("Transfer-Encoding")
+	CHUNKED                 = []byte("chunked")
 
 	// https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol#Summary_table
 	HTTP_METHOD_WITHOUT_BODY_PREFIXES = [][]byte{[]byte("GET "), []byte("HEAD "), []byte("DELETE "), []byte("TRACE ")}
@@ -96,6 +97,8 @@ type proxyHTTPHeadersRes struct {
 	HasBody          bool
 	Err              error
 	IsHeadMethod     bool
+	IsLimited        bool
+	Chunked          bool
 }
 
 func proxyHTTPHeaders(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn, proxyKeepAliveMode int) (
@@ -162,6 +165,7 @@ readHeaderLines:
 				for _, statusCodeWithoutBody := range STATUS_CODES_WITHOUT_BODY {
 					if bytes.HasPrefix(statusCode, statusCodeWithoutBody) {
 						res.HasBody = false
+						res.IsLimited = true
 					}
 				}
 			} else {
@@ -177,6 +181,7 @@ readHeaderLines:
 				for _, testMethod := range HTTP_METHOD_WITHOUT_BODY_PREFIXES {
 					if bytes.HasPrefix(requestLine, testMethod) {
 						res.HasBody = false
+						res.IsLimited = true
 					}
 				}
 			}
@@ -200,9 +205,7 @@ readHeaderLines:
 		switch proxyKeepAliveMode {
 		case PROXY_KEEPALIVE_NOTHING:
 			// pass
-		case PROXY_KEEPALIVE_DROP:
-			skipHeader = skipHeader || bytes.EqualFold(headerName, HEAD_CONNECTION)
-		case PROXY_KEEPALIVE_FORCE:
+		case PROXY_KEEPALIVE_DROP, PROXY_KEEPALIVE_FORCE:
 			skipHeader = skipHeader || bytes.EqualFold(headerName, HEAD_CONNECTION)
 		default:
 			panic("Unknow proxyKeepAliveMode")
@@ -223,7 +226,7 @@ readHeaderLines:
 		headerContent := bytes.NewBuffer(buf[1+len(headerStart):])
 		headerContent.Reset()
 
-		needHeaderContent := bytes.EqualFold(headerName, HEAD_CONTENT_LENGTH) || bytes.EqualFold(headerName, HEAD_CONNECTION)
+		needHeaderContent := bytes.EqualFold(headerName, HEAD_CONTENT_LENGTH) || bytes.EqualFold(headerName, HEAD_CONNECTION) || bytes.EqualFold(headerName, TRANSFER_ENCODING)
 
 		buf[0] = 0
 		for buf[0] != '\n' {
@@ -258,13 +261,19 @@ readHeaderLines:
 				res.ContentLength, res.Err = strconv.ParseInt(string(bytes.TrimSpace(headerContent.Bytes())), 10, 64)
 				if res.Err == nil {
 					res.HasContentLength = true
+					res.IsLimited = true
 					logrus.Debugf("Header content-length parsed from '%v' to '%v' cid '%v': %v", sourceConn.RemoteAddr(),
 						targetConn.RemoteAddr(), cid, res.ContentLength)
 				} else {
 					logrus.Infof("Can't header content-length parsed from '%v' to '%v' cid '%v' content '%s': %v", sourceConn.RemoteAddr(),
 						targetConn.RemoteAddr(), cid, headerContent.Bytes(), res.Err)
 				}
-
+			case bytes.EqualFold(headerName, TRANSFER_ENCODING):
+				encoding := bytes.TrimSpace(headerContent.Bytes())
+				if bytes.EqualFold(encoding, CHUNKED) {
+					res.Chunked = true
+					res.IsLimited = true
+				}
 			default:
 				logrus.Debugf("ERROR. Unknow why i need header content. Code error. From '%v' to '%v' cid '%v', header name '%s'",
 					sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName,
@@ -319,6 +328,112 @@ readHeaderLines:
 	return
 }
 
+func proxyHTTPBody(cid ConnectionID, dst, src net.Conn, headers proxyHTTPHeadersRes) (err error) {
+	switch {
+	case !headers.HasBody:
+		logrus.Debugf("Cid '%v'. No body.", cid)
+	case headers.HasContentLength:
+		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy with content length: %v", cid, src, dst, headers.ContentLength)
+		mem := netbufGet()
+		_, err = io.CopyBuffer(dst, io.LimitReader(src, headers.ContentLength), mem)
+		netbufPut(mem)
+		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy content finished.", cid, src.RemoteAddr(), dst.RemoteAddr())
+	case headers.Chunked:
+		mem := netbufGet()
+		defer netbufPut(mem)
+
+		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Start proxy chunks", cid, src.RemoteAddr(), dst.RemoteAddr())
+		for {
+			buf := bytes.NewBuffer(mem[1:])
+			buf.Reset()
+
+			// read chunk header
+			b := &mem[0]
+			*b = 0
+			for *b != '\n' {
+				readBytes, err := src.Read(mem[:1])
+				if err != nil {
+					logrus.Debugf("Cid '%v'. Can't read chunk header: %v", cid, err)
+					return err
+				}
+				if readBytes == 0 {
+					continue
+				}
+				buf.WriteByte(*b)
+			}
+			chunkHeader := buf.Bytes()
+			dst.Write(chunkHeader)
+			noDigitIndex := -0
+			for {
+				if len(chunkHeader) <= noDigitIndex {
+					break
+				}
+				if !isHexDigit(chunkHeader[noDigitIndex]) {
+					break
+				}
+				noDigitIndex++
+			}
+
+			chunkLen, err := strconv.ParseInt(string(chunkHeader[:noDigitIndex]), 16, 64)
+			if err != nil {
+				logrus.Debugf("Cid '%v'. '%v' -> '%v'. Can't parse chunk len '%s': %v", cid, src.RemoteAddr(), dst.RemoteAddr(), chunkHeader, err)
+				return err
+			}
+
+			if chunkLen == 0 {
+				logrus.Debugf("Cid '%v'. '%v' -> '%v'. Complete proxy chunks. Proxy trailer.", cid, src.RemoteAddr(), dst.RemoteAddr())
+				buf := bytes.NewBuffer(mem[1:])
+
+				for {
+					// read line
+					buf.Reset()
+					for {
+						readBytes, err := src.Read(mem[:1])
+						if err != nil {
+							logrus.Debugf("Cid '%v'. '%v' -> '%v'. Error while read chunked trailer: %v", cid, src.RemoteAddr(), err)
+							return err
+						}
+						if readBytes == 0 {
+							continue
+						}
+						err = buf.WriteByte(mem[0])
+						if err != nil {
+							logrus.Debugf("Cid '%v'. '%v' -> '%v'. Error while write chunked trailer to buffer: %v", cid, src.RemoteAddr(), err)
+						}
+
+						if mem[0] == '\n' {
+							break
+						}
+					}
+					line := buf.Bytes()
+					_, err = dst.Write(line)
+					if err != nil {
+						logrus.Debugf("Cid '%v'. '%v' -> '%v'. Error while write chunked trailer dst: %v", cid, src.RemoteAddr(), err)
+						return err
+					}
+					if len(line) == 2 { // \r\n only
+						logrus.Debugf("Cid '%v'. '%v' -> '%v'. Complete proxy trailer.", cid, src.RemoteAddr(), dst.RemoteAddr())
+						break
+					}
+				}
+
+				return nil
+			} else {
+				logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy chunk: %v", cid, src.RemoteAddr(), dst.RemoteAddr(), chunkLen)
+				_, err = io.CopyBuffer(dst, io.LimitReader(src, chunkLen+2), mem) // + \r\n at end of data
+			}
+		}
+
+	default:
+		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy content until close connection", cid, src.RemoteAddr(), dst.RemoteAddr())
+		buf := netbufGet()
+		_, err = io.CopyBuffer(dst, src, buf)
+		netbufPut(buf)
+		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy content finished.", cid, src, dst)
+	}
+	return err
+}
+
 func startProxy(cid ConnectionID, targetAddr net.TCPAddr, in net.Conn) {
 	switch *proxyMode {
 	case "http":
@@ -340,11 +455,9 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			backendConn.Close()
 		}
 	}()
+
 	var err error
 
-	buf := netbufGet()
-	defer netbufPut(buf)
-	var receivedBytesCount int64
 	for {
 		if backendConn == nil {
 			backendConn, err = connectTo(cid, targetAddr)
@@ -365,97 +478,43 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			proxyKeepAliveModeToCustomer = PROXY_KEEPALIVE_FORCE
 		}
 		logrus.Debugf("Cid '%v'. Start proxy request", cid)
-		state := proxyHTTPHeaders(cid, backendConn, customerConn, proxyKeepAliveModeToBackend)
+		requestHeadersRes := proxyHTTPHeaders(cid, backendConn, customerConn, proxyKeepAliveModeToBackend)
 		if keepAliveMode == KEEPALIVE_NO_BACKEND {
 			// Current not timeout during proxy request.
 			customerConn.SetReadDeadline(time.Time{})
 		}
-		keepAlive := state.KeepAlive
-		if state.Err != nil {
-			logrus.Debugf("Cid '%v'. Can't read headers: %v", cid, state.Err)
+		if requestHeadersRes.Err != nil {
+			logrus.Debugf("Cid '%v'. Can't read headers: %v", cid, requestHeadersRes.Err)
 			return
 		}
-		if state.HasContentLength || !state.HasBody {
-			logrus.Debugf("Cid '%v'. Start length-limited content proxy. '%v' -> '%v', content-length '%v'", cid, customerConn.RemoteAddr(),
-				backendConn.RemoteAddr(), state.ContentLength)
-
-			if state.HasBody {
-				//request
-				bytesCopied, err := io.CopyBuffer(backendConn, io.LimitReader(customerConn, state.ContentLength), buf)
-				receivedBytesCount += bytesCopied
-
-				if err == nil {
-					logrus.Debugf("Connection chunk copied '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
-				} else {
-					logrus.Debugf("Connection closed '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
-					return
-				}
-			} else {
-				logrus.Debugf("Cid '%v'. Have no body.", cid)
-			}
-
-			// proxy answer
-			logrus.Debugf("Cid '%v'. Start proxy answer", cid)
-			answerState := proxyHTTPHeaders(cid, customerConn, backendConn, proxyKeepAliveModeToCustomer)
-			keepAlive = keepAlive && answerState.KeepAlive
-			var reader io.Reader
-
-			if answerState.HasBody && !state.IsHeadMethod {
-				if answerState.HasContentLength {
-					logrus.Debugf("Cid '%v'. Limit answer length: %v", cid, answerState.ContentLength)
-					reader = io.LimitReader(backendConn, answerState.ContentLength)
-				} else {
-					logrus.Debugf("Cid '%v'. Proxy answer until EOF.", cid)
-					reader = backendConn
-				}
-			} else {
-				// no body
-				logrus.Debugf("Cid '%v'. No body.", cid)
-				reader = bytes.NewReader(nil)
-			}
-
-			logrus.Debugf("Cid '%v'. Start proxy answer body.", cid)
-			_, err = io.CopyBuffer(customerConn, reader, buf)
-			if err != nil {
-				logrus.Debugf("Cid '%v'. Can't copy answer to customer: %v", cid, err)
-				return
-			}
-
-			switch keepAliveMode {
-			case KEEPALIVE_TRANSPARENT:
-				// pass
-				// keep connections
-			case KEEPALIVE_NO_BACKEND:
-				backendConn.Close()
-				backendConn = nil
-			default:
-				panic(fmt.Errorf("I doesn't know keep alive mode '%v'", keepAliveMode))
-			}
+		if requestHeadersRes.IsLimited {
+			err = proxyHTTPBody(cid, customerConn, backendConn, requestHeadersRes)
 		} else {
-			// answer from server proxy without changes
 			go func() {
-				buf := netbufGet()
-				defer netbufPut(buf)
-
-				_, err := io.CopyBuffer(customerConn, backendConn, buf)
-				logrus.Debugf("Connection closed with error1 '%v' -> '%v' cid '%v': %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, err)
-				customerConn.Close()
-				backendConn.Close()
+				// proxy request until close connection
+				logrus.Debugf("Cid '%v'. Unlimited request mode.", cid)
+				proxyHTTPBody(cid, customerConn, backendConn, requestHeadersRes)
 			}()
+		}
 
-			logrus.Debugf("Start proxy without support keepalive middle headers '%v' -> '%v' cid '%v'", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid)
-			bytesCopied, err := io.CopyBuffer(backendConn, customerConn, buf)
-			receivedBytesCount += bytesCopied
-			if err == nil {
-				logrus.Debugf("Connection closed '%v' -> '%v' cid '%v', bytes transferred '%v' (%v).", customerConn, backendConn, cid, bytesCopied, receivedBytesCount)
-			} else {
-				logrus.Debugf("Connection closed '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
-			}
+		responseHeadersRes := proxyHTTPHeaders(cid, customerConn, backendConn, proxyKeepAliveModeToCustomer)
+		if responseHeadersRes.Err != nil {
+			return
+		}
+		if requestHeadersRes.IsHeadMethod {
+			logrus.Debugf("Cid '%v'. No proxy body for HEAD method.", cid)
+		} else {
+			err = proxyHTTPBody(cid, customerConn, backendConn, responseHeadersRes)
+		}
+
+		if proxyKeepAliveModeToCustomer == PROXY_KEEPALIVE_DROP || !requestHeadersRes.KeepAlive || !requestHeadersRes.IsLimited {
+			// close connections by defer
 			return
 		}
 
-		if !keepAlive {
-			return
+		if proxyKeepAliveModeToBackend == PROXY_KEEPALIVE_DROP || !responseHeadersRes.KeepAlive || !responseHeadersRes.IsLimited {
+			backendConn.Close()
+			backendConn = nil
 		}
 	}
 
@@ -488,4 +547,8 @@ func startProxyTCP(cid ConnectionID, targetAddr net.TCPAddr, sourceConn net.Conn
 		sourceConn.Close()
 		targetConn.Close()
 	}()
+}
+
+func isHexDigit(b byte) bool {
+	return ('0' <= b && b <= '9') || ('a' <= b && b <= 'f') || ('A' <= b && b <= 'F')
 }

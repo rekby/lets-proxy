@@ -42,6 +42,8 @@ var (
 	HEAD_HTTP_1_1           = []byte("HTTP/1.1")
 	HEAD_HEAD_METHOD_PREFIX = []byte("HEAD ")
 	STATUS_LINE_PREFIX      = []byte("HTTP/1.")
+	TRANSFER_ENCODING       = []byte("Transfer-Encoding")
+	CHUNKED                 = []byte("chunked")
 
 	// https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol#Summary_table
 	HTTP_METHOD_WITHOUT_BODY_PREFIXES = [][]byte{[]byte("GET "), []byte("HEAD "), []byte("DELETE "), []byte("TRACE ")}
@@ -96,6 +98,7 @@ type proxyHTTPHeadersRes struct {
 	Err              error
 	IsHeadMethod     bool
 	IsLimited        bool
+	Chunked          bool
 }
 
 func proxyHTTPHeaders(cid ConnectionID, targetConn net.Conn, sourceConn net.Conn, proxyKeepAliveMode int) (
@@ -223,7 +226,7 @@ readHeaderLines:
 		headerContent := bytes.NewBuffer(buf[1+len(headerStart):])
 		headerContent.Reset()
 
-		needHeaderContent := bytes.EqualFold(headerName, HEAD_CONTENT_LENGTH) || bytes.EqualFold(headerName, HEAD_CONNECTION)
+		needHeaderContent := bytes.EqualFold(headerName, HEAD_CONTENT_LENGTH) || bytes.EqualFold(headerName, HEAD_CONNECTION) || bytes.EqualFold(headerName, TRANSFER_ENCODING)
 
 		buf[0] = 0
 		for buf[0] != '\n' {
@@ -265,7 +268,12 @@ readHeaderLines:
 					logrus.Infof("Can't header content-length parsed from '%v' to '%v' cid '%v' content '%s': %v", sourceConn.RemoteAddr(),
 						targetConn.RemoteAddr(), cid, headerContent.Bytes(), res.Err)
 				}
-
+			case bytes.EqualFold(headerName, TRANSFER_ENCODING):
+				encoding := bytes.TrimSpace(headerContent.Bytes())
+				if bytes.EqualFold(encoding, CHUNKED) {
+					res.Chunked = true
+					res.IsLimited = true
+				}
 			default:
 				logrus.Debugf("ERROR. Unknow why i need header content. Code error. From '%v' to '%v' cid '%v', header name '%s'",
 					sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName,
@@ -326,10 +334,96 @@ func proxyHTTPBody(cid ConnectionID, dst, src net.Conn, headers proxyHTTPHeaders
 		logrus.Debugf("Cid '%v'. No body.", cid)
 	case headers.HasContentLength:
 		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy with content length: %v", cid, src, dst, headers.ContentLength)
-		buf := netbufGet()
-		_, err = io.CopyBuffer(dst, io.LimitReader(src, headers.ContentLength), buf)
-		netbufPut(buf)
+		mem := netbufGet()
+		_, err = io.CopyBuffer(dst, io.LimitReader(src, headers.ContentLength), mem)
+		netbufPut(mem)
 		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy content finished.", cid, src.RemoteAddr(), dst.RemoteAddr())
+	case headers.Chunked:
+		mem := netbufGet()
+		defer netbufPut(mem)
+
+		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Start proxy chunks", cid, src.RemoteAddr(), dst.RemoteAddr())
+		for {
+			buf := bytes.NewBuffer(mem[1:])
+			buf.Reset()
+
+			// read chunk header
+			b := &mem[0]
+			*b = 0
+			for *b != '\n' {
+				readBytes, err := src.Read(mem[:1])
+				if err != nil {
+					logrus.Debugf("Cid '%v'. Can't read chunk header: %v", cid, err)
+					return err
+				}
+				if readBytes == 0 {
+					continue
+				}
+				buf.WriteByte(*b)
+			}
+			chunkHeader := buf.Bytes()
+			dst.Write(chunkHeader)
+			noDigitIndex := -0
+			for {
+				if len(chunkHeader) <= noDigitIndex {
+					break
+				}
+				if !isHexDigit(chunkHeader[noDigitIndex]) {
+					break
+				}
+				noDigitIndex++
+			}
+
+			chunkLen, err := strconv.ParseInt(string(chunkHeader[:noDigitIndex]), 16, 64)
+			if err != nil {
+				logrus.Debugf("Cid '%v'. '%v' -> '%v'. Can't parse chunk len '%s': %v", cid, src.RemoteAddr(), dst.RemoteAddr(), chunkHeader, err)
+				return err
+			}
+
+			if chunkLen == 0 {
+				logrus.Debugf("Cid '%v'. '%v' -> '%v'. Complete proxy chunks. Proxy trailer.", cid, src.RemoteAddr(), dst.RemoteAddr())
+				buf := bytes.NewBuffer(mem[1:])
+
+				for {
+					// read line
+					buf.Reset()
+					for {
+						readBytes, err := src.Read(mem[:1])
+						if err != nil {
+							logrus.Debugf("Cid '%v'. '%v' -> '%v'. Error while read chunked trailer: %v", cid, src.RemoteAddr(), err)
+							return err
+						}
+						if readBytes == 0 {
+							continue
+						}
+						err = buf.WriteByte(mem[0])
+						if err != nil {
+							logrus.Debugf("Cid '%v'. '%v' -> '%v'. Error while write chunked trailer to buffer: %v", cid, src.RemoteAddr(), err)
+						}
+
+						if mem[0] == '\n' {
+							break
+						}
+					}
+					line := buf.Bytes()
+					_, err = dst.Write(line)
+					if err != nil {
+						logrus.Debugf("Cid '%v'. '%v' -> '%v'. Error while write chunked trailer dst: %v", cid, src.RemoteAddr(), err)
+						return err
+					}
+					if len(line) == 2 { // \r\n only
+						logrus.Debugf("Cid '%v'. '%v' -> '%v'. Complete proxy trailer.", cid, src.RemoteAddr(), dst.RemoteAddr())
+						break
+					}
+				}
+
+				return nil
+			} else {
+				logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy chunk: %v", cid, src.RemoteAddr(), dst.RemoteAddr(), chunkLen)
+				_, err = io.CopyBuffer(dst, io.LimitReader(src, chunkLen+2), mem) // + \r\n at end of data
+			}
+		}
+
 	default:
 		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy content until close connection", cid, src.RemoteAddr(), dst.RemoteAddr())
 		buf := netbufGet()
@@ -361,6 +455,7 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			backendConn.Close()
 		}
 	}()
+
 	var err error
 
 	for {
@@ -452,4 +547,8 @@ func startProxyTCP(cid ConnectionID, targetAddr net.TCPAddr, sourceConn net.Conn
 		sourceConn.Close()
 		targetConn.Close()
 	}()
+}
+
+func isHexDigit(b byte) bool {
+	return ('0' <= b && b <= '9') || ('a' <= b && b <= 'f') || ('A' <= b && b <= 'F')
 }

@@ -126,7 +126,11 @@ readHeaderLines:
 			}
 			if buf[i] == ':' || buf[i] == '\n' {
 				headerStart = buf[1 : i+1]
-				logrus.Debugf("Header Name '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, buf[:i])
+				//var headerName []byte
+				//if len(headerStart) > 0 {
+				//	headerName = headerStart[:len(headerStart)-1]
+				//}
+				//logrus.Debugf("Header Name '%v' -> '%v' cid '%v': '%s'", sourceConn.RemoteAddr(), targetConn.RemoteAddr(), cid, headerName)
 				break
 			}
 		}
@@ -355,10 +359,12 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 		proxyKeepAliveModeToBackend := PROXY_KEEPALIVE_NOTHING
 		proxyKeepAliveModeToCustomer := PROXY_KEEPALIVE_NOTHING
 		if keepAliveMode == KEEPALIVE_NO_BACKEND {
+
 			customerConn.SetReadDeadline(time.Now().Add(*keepAliveCustomerTimeout))
 			proxyKeepAliveModeToBackend = PROXY_KEEPALIVE_DROP
 			proxyKeepAliveModeToCustomer = PROXY_KEEPALIVE_FORCE
 		}
+		logrus.Debugf("Cid '%v'. Start proxy request", cid)
 		state := proxyHTTPHeaders(cid, backendConn, customerConn, proxyKeepAliveModeToBackend)
 		if keepAliveMode == KEEPALIVE_NO_BACKEND {
 			// Current not timeout during proxy request.
@@ -370,8 +376,8 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			return
 		}
 		if state.HasContentLength || !state.HasBody {
-			logrus.Debugf("Start keep-alieved proxy. '%v' -> '%v' cid '%v', content-length '%v'", customerConn.RemoteAddr(),
-				backendConn.RemoteAddr(), cid, state.ContentLength)
+			logrus.Debugf("Cid '%v'. Start length-limited content proxy. '%v' -> '%v', content-length '%v'", cid, customerConn.RemoteAddr(),
+				backendConn.RemoteAddr(), state.ContentLength)
 
 			if state.HasBody {
 				//request
@@ -384,21 +390,31 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 					logrus.Debugf("Connection closed '%v' -> '%v' cid '%v', bytes transferred '%v' (%v), error: %v", customerConn.RemoteAddr(), backendConn.RemoteAddr(), cid, bytesCopied, receivedBytesCount, err)
 					return
 				}
+			} else {
+				logrus.Debugf("Cid '%v'. Have no body.", cid)
 			}
 
 			// proxy answer
+			logrus.Debugf("Cid '%v'. Start proxy answer", cid)
 			answerState := proxyHTTPHeaders(cid, customerConn, backendConn, proxyKeepAliveModeToCustomer)
 			keepAlive = keepAlive && answerState.KeepAlive
 			var reader io.Reader
 
 			if answerState.HasBody && !state.IsHeadMethod {
 				if answerState.HasContentLength {
+					logrus.Debugf("Cid '%v'. Limit answer length: %v", cid, answerState.ContentLength)
 					reader = io.LimitReader(backendConn, answerState.ContentLength)
 				} else {
+					logrus.Debugf("Cid '%v'. Proxy answer until EOF.", cid)
 					reader = backendConn
 				}
+			} else {
+				// no body
+				logrus.Debugf("Cid '%v'. No body.", cid)
+				reader = bytes.NewReader(nil)
 			}
 
+			logrus.Debugf("Cid '%v'. Start proxy answer body.", cid)
 			_, err = io.CopyBuffer(customerConn, reader, buf)
 			if err != nil {
 				logrus.Debugf("Cid '%v'. Can't copy answer to customer: %v", cid, err)

@@ -313,7 +313,7 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 	}
 
 	if len(authorizedDomains) == 0 {
-		logrus.Info("Can't authorize any domains from '%v'", domains)
+		logrus.Infof("Can't authorize any domains from '%v'", domains)
 		return nil, errors.New("Can't authorize domains")
 	}
 

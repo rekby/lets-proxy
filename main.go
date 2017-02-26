@@ -34,16 +34,17 @@ import (
 )
 
 const (
-	LETSENCRYPT_CREATE_CERTIFICATE_TIMEOUT = time.Minute
-	LETSENCRYPT_PRODUCTION_API_URL         = "https://acme-v01.api.letsencrypt.org/directory"
-	LETSENCRYPT_STAGING_API_URL            = "https://acme-staging.api.letsencrypt.org/directory"
-	TRY_COUNT                              = 10
-	RETRY_SLEEP                            = time.Second * 5
-	STATE_FILEMODE                         = 0600
-	SERVICE_NAME_EXAMPLE                   = "<service-name>"
-	WORKING_DIR_ARG_NAME                   = "working-dir"
-	DEFAULT_BIND_PORT                      = 443
-	DAEMON_KEY_NAME                        = "daemon"
+	LETSENCRYPT_CREATE_CERTIFICATE_TIMEOUT           = time.Minute
+	LETSENCRYPT_BACKGROUND_RENEW_CERTIFICATE_TIMEOUT = time.Minute * 5
+	LETSENCRYPT_PRODUCTION_API_URL                   = "https://acme-v01.api.letsencrypt.org/directory"
+	LETSENCRYPT_STAGING_API_URL                      = "https://acme-staging.api.letsencrypt.org/directory"
+	TRY_COUNT                                        = 10
+	RETRY_SLEEP                                      = time.Second * 5
+	STATE_FILEMODE                                   = 0600
+	SERVICE_NAME_EXAMPLE                             = "<service-name>"
+	WORKING_DIR_ARG_NAME                             = "working-dir"
+	DEFAULT_BIND_PORT                                = 443
+	DAEMON_KEY_NAME                                  = "daemon"
 )
 
 var (
@@ -478,7 +479,9 @@ checkCertInCache:
 						return
 					}
 
-					cert, err := acmeService.CreateCertificate(ctx, domainsToObtain, "")
+					/* Background renew independent of the request context.*/
+					background_renew_ctx, _ := context.WithTimeout(context.Background(), LETSENCRYPT_BACKGROUND_RENEW_CERTIFICATE_TIMEOUT*5)
+					cert, err := acmeService.CreateCertificate(background_renew_ctx	, domainsToObtain, "")
 					if err == nil {
 						logrus.Infof("Background certificate obtained for: %v", cert.Leaf.DNSNames)
 						certificateCachePut(baseDomain, cert)

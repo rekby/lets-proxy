@@ -461,7 +461,7 @@ checkCertInCache:
 
 		case cert != nil:
 			// need for background cert renew
-			if cert.Leaf.NotAfter.Before(time.Now().Add(*timeToRenew)) {
+			if cert.Leaf.NotAfter.Before(now.Add(*timeToRenew)) {
 				go func(domainsToObtain []string, baseDomain string) {
 					if skipDomainsCheck(domainsToObtain) {
 						return

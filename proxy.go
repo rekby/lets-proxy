@@ -336,7 +336,19 @@ func proxyHTTPBody(cid ConnectionID, dst, src net.Conn, headers proxyHTTPHeaders
 	case headers.HasContentLength:
 		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy with content length: %v", cid, src.RemoteAddr(), dst.RemoteAddr(), headers.ContentLength)
 		mem := netbufGet()
-		_, err = io.CopyBuffer(dst, io.LimitReader(src, headers.ContentLength), mem)
+		//_, err = io.CopyBuffer(dst, io.LimitReader(src, headers.ContentLength), mem)
+		if headers.ContentLength == 7 {
+			logrus.Debug(7777)
+		}
+		for i := int64(0); i < headers.ContentLength; i++ {
+			buf := make([]byte, 1)
+			_, err := src.Read(buf)
+			if err != nil {
+				s := err.Error()
+				_ = s
+			}
+			dst.Write(buf)
+		}
 		netbufPut(mem)
 		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy content finished.", cid, src.RemoteAddr(), dst.RemoteAddr())
 	case headers.Chunked:
@@ -486,12 +498,12 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			return
 		}
 		if requestHeadersRes.IsLimited {
-			err = proxyHTTPBody(cid, customerConn, backendConn, requestHeadersRes)
+			err = proxyHTTPBody(cid, backendConn, customerConn, requestHeadersRes)
 		} else {
 			go func() {
 				// proxy request until close connection
 				logrus.Debugf("Cid '%v'. Unlimited request mode.", cid)
-				proxyHTTPBody(cid, customerConn, backendConn, requestHeadersRes)
+				proxyHTTPBody(cid, backendConn, customerConn, requestHeadersRes)
 			}()
 		}
 
@@ -503,6 +515,9 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			logrus.Debugf("Cid '%v'. No proxy body for HEAD method.", cid)
 		} else {
 			err = proxyHTTPBody(cid, customerConn, backendConn, responseHeadersRes)
+			if err != nil {
+				logrus.Debugf("Cid '%v'. Error while proxy body: %v", cid, err)
+			}
 		}
 
 		if proxyKeepAliveModeToCustomer == PROXY_KEEPALIVE_DROP || !requestHeadersRes.KeepAlive || !requestHeadersRes.IsLimited {

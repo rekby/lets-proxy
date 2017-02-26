@@ -525,11 +525,12 @@ checkCertInCache:
 
 	// check if get cert between check cache and lock to obtain
 	cert = certificateCacheGet(baseDomain)
-	if now.After(cert.Leaf.NotAfter) {
+	if cert != nil && now.After(cert.Leaf.NotAfter) {
 		logrus.Debugf("Certificate from cache expired. Renew it: %v\n", domainsToObtain)
 		cert = nil
 	}
 	if cert != nil && !stringsContains(cert.Leaf.DNSNames, domain) {
+		logrus.Debugf("Certificate from cache doesn't contain domain: %v not in %v\n", domain, cert.Leaf.DNSNames)
 		cert = nil
 	}
 

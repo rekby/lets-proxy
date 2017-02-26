@@ -334,7 +334,7 @@ func proxyHTTPBody(cid ConnectionID, dst, src net.Conn, headers proxyHTTPHeaders
 	case !headers.HasBody:
 		logrus.Debugf("Cid '%v'. No body.", cid)
 	case headers.HasContentLength:
-		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy with content length: %v", cid, src, dst, headers.ContentLength)
+		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy with content length: %v", cid, src.RemoteAddr(), dst.RemoteAddr(), headers.ContentLength)
 		mem := netbufGet()
 		_, err = io.CopyBuffer(dst, io.LimitReader(src, headers.ContentLength), mem)
 		netbufPut(mem)

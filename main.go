@@ -47,6 +47,12 @@ const (
 	DAEMON_KEY_NAME                                  = "daemon"
 )
 
+const (
+	PROXYMODE_HTTP         = "http"
+	PROXYMODE_HTTP_BUILTIN = "http-built-in"
+	PROXYMODE_TCP          = "tcp"
+)
+
 var (
 	acmeParallelCount             = flag.Int("acme-parallel", 10, "Count of parallel requests for ACME server")
 	acmeServerUrl                 = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
@@ -81,7 +87,7 @@ var (
 	privateKeyBits                = flag.Int("private-key-len", 2048, "Length of private keys in bits")
 	profilerBindAddress           = flag.String("profiler-bind", "", "Address for get of profiler dump by http. Profiler disable if empty.")
 	profilerPassword              = flag.String("profiler-password", "", "Password for get access to profiler info. Profiler disable if empty. Usage go tool pprof http://<Addr>/debug/pprof/...?password=<password>. For example: http://127.0.0.1:3123/debug/pprof/heap?password=123")
-	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after TLS handled (http|http-built-in|tcp). http-built-in - use golang reverse proxy from http/httputil.ReverseProxy, it full parse http protocol. http - own http proxy, it avoid memory allocation when possible and better log internal steps. It parse only small part http protocol, but usually work good.")
+	proxyMode                     = flag.String("proxy-mode", PROXYMODE_HTTP, "Proxy-mode after TLS handled ("+PROXYMODE_HTTP+"|"+PROXYMODE_HTTP_BUILTIN+"|"+PROXYMODE_TCP+". http-built-in - use golang reverse proxy from http/httputil.ReverseProxy, it full parse http protocol. http - own http proxy, it avoid memory allocation when possible and better log internal steps. It parse only small part http protocol, but usually work good.")
 	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. Multiple headers are separated with a comma.")
 	runAs                         = flag.String("runas", "", "Run as a different user. This works only for --daemon, and only for Unix and requires to run from specified user or root. It can be user login or user id. It also changes default work dir to home folder of the user (can be changed by explicit --"+WORKING_DIR_ARG_NAME+"). Run will fail if use this option without --daemon.")
 	serviceAction                 = flag.String("service-action", "", "Start, stop, install, uninstall, reinstall")
@@ -366,6 +372,17 @@ func main() {
 }
 
 func acceptConnections(listeners []*net.TCPListener) {
+	switch *proxyMode {
+	case PROXYMODE_HTTP, PROXYMODE_TCP:
+		acceptConnectionsOwn(listeners)
+	case PROXYMODE_HTTP_BUILTIN:
+		acceptConnectionsBuiltinProxy(listeners)
+	default:
+		logrus.Fatalf("Bad proxy mode: %v", *proxyMode)
+	}
+}
+
+func acceptConnectionsOwn(listeners []*net.TCPListener) {
 	for _, listener := range listeners {
 		go acceptConnectionsFromAListener(listener)
 	}
@@ -615,24 +632,45 @@ forRegexpCheckDomain:
 	return cert, err
 }
 
-func getTargetAddr(cid ConnectionID, in *net.TCPConn) (net.TCPAddr, error) {
+func createTlsConfig() *tls.Config {
+	tlsConfig := &tls.Config{
+		GetCertificate: certificateGet,
+	}
+	switch strings.TrimSpace(*minTLSVersion) {
+	case "":
+	// pass
+	case "ssl3":
+		tlsConfig.MinVersion = tls.VersionSSL30
+	case "tls10":
+		tlsConfig.MinVersion = tls.VersionTLS10
+	case "tls11":
+		tlsConfig.MinVersion = tls.VersionTLS11
+	case "tls12":
+		tlsConfig.MinVersion = tls.VersionTLS12
+	default:
+		logrus.Fatalf("Doesn't know tls version '%v', use default. cid '%v'", *minTLSVersion)
+	}
+	return tlsConfig
+}
+
+func getTargetAddr(cid ConnectionID, in net.Addr) (net.TCPAddr, error) {
 	var target net.TCPAddr
 
 	var mappedTarget *net.TCPAddr
 	if targetMap != nil {
-		mappedTarget = targetMap[in.LocalAddr().String()]
+		mappedTarget = targetMap[in.String()]
 	}
 	if mappedTarget == nil {
 		target = *paramTargetTcpAddr
 	} else {
 		target = *mappedTarget
-		logrus.Debugf("Select target address by target map (cid %v) '%v' -> '%v'", cid, in.LocalAddr(), target)
+		logrus.Debugf("Select target address by target map (cid %v) '%v' -> '%v'", cid, in, target)
 	}
 
 	if target.IP == nil || target.IP.IsUnspecified() {
-		receiveAddr, ok := in.LocalAddr().(*net.TCPAddr)
+		receiveAddr, ok := in.(*net.TCPAddr)
 		if !ok {
-			logrus.Errorf("Can't cast incoming addr to tcp addr: '%v'", in.LocalAddr())
+			logrus.Errorf("Can't cast incoming addr to tcp addr: '%v'", in)
 			return net.TCPAddr{}, errors.New("Can't cast incoming addr to tcp addr")
 		}
 		target.IP = receiveAddr.IP
@@ -644,7 +682,7 @@ func getTargetAddr(cid ConnectionID, in *net.TCPConn) (net.TCPAddr, error) {
 		target.Port = paramTargetTcpAddr.Port
 	}
 
-	logrus.Debugf("Target address for '%v' (cid '%v'): %v", in.RemoteAddr(), cid, target)
+	logrus.Debugf("Target address for '%v' (cid '%v'): %v", in, cid, target)
 	return target, nil
 }
 
@@ -654,31 +692,14 @@ func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
 	in.SetKeepAlive(true)
 	in.SetKeepAlivePeriod(*tcpKeepAliveInterval)
 
-	target, err := getTargetAddr(cid, in)
+	target, err := getTargetAddr(cid, in.LocalAddr())
 	if err != nil {
 		logrus.Errorf("Can't get target IP/port for '%v' (cid '%v'): %v", in.RemoteAddr(), cid, err)
 		return
 	}
 
 	// handle ssl
-	tlsConfig := tls.Config{
-		GetCertificate: certificateGet,
-	}
-	switch strings.TrimSpace(*minTLSVersion) {
-	case "":
-		// pass
-	case "ssl3":
-		tlsConfig.MinVersion = tls.VersionSSL30
-	case "tls10":
-		tlsConfig.MinVersion = tls.VersionTLS10
-	case "tls11":
-		tlsConfig.MinVersion = tls.VersionTLS11
-	case "tls12":
-		tlsConfig.MinVersion = tls.VersionTLS12
-	default:
-		logrus.Errorf("Doesn't know tls version '%v', use default. cid '%v'", *minTLSVersion, cid)
-	}
-	tlsConn := tls.Server(in, &tlsConfig)
+	tlsConn := tls.Server(in, createTlsConfig())
 	err = tlsConn.Handshake()
 	logrus.Debugf("tls ciper, cid %v: %v", cid, tlsConn.ConnectionState().CipherSuite)
 	if err == nil {
@@ -701,7 +722,7 @@ func prepare() {
 	var err error
 
 	// Init
-	if *proxyMode != "http" && *proxyMode != "tcp" {
+	if *proxyMode != PROXYMODE_HTTP && *proxyMode != PROXYMODE_TCP && *proxyMode != PROXYMODE_HTTP_BUILTIN {
 		logrus.Panicf("Unknow proxy mode: %v", *proxyMode)
 	}
 	logrus.Infof("Proxy mode: %v", *proxyMode)

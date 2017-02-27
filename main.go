@@ -81,7 +81,7 @@ var (
 	privateKeyBits                = flag.Int("private-key-len", 2048, "Length of private keys in bits")
 	profilerBindAddress           = flag.String("profiler-bind", "", "Address for get of profiler dump by http. Profiler disable if empty.")
 	profilerPassword              = flag.String("profiler-password", "", "Password for get access to profiler info. Profiler disable if empty. Usage go tool pprof http://<Addr>/debug/pprof/...?password=<password>. For example: http://127.0.0.1:3123/debug/pprof/heap?password=123")
-	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after TLS handled (http|tcp).")
+	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after TLS handled (http|http-built-in|tcp). http-built-in - use golang reverse proxy from http/httputil.ReverseProxy, it full parse http protocol. http - own http proxy, it avoid memory allocation when possible and better log internal steps. It parse only small part http protocol, but usually work good.")
 	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. Multiple headers are separated with a comma.")
 	runAs                         = flag.String("runas", "", "Run as a different user. This works only for --daemon, and only for Unix and requires to run from specified user or root. It can be user login or user id. It also changes default work dir to home folder of the user (can be changed by explicit --"+WORKING_DIR_ARG_NAME+"). Run will fail if use this option without --daemon.")
 	serviceAction                 = flag.String("service-action", "", "Start, stop, install, uninstall, reinstall")
@@ -481,7 +481,7 @@ checkCertInCache:
 
 					/* Background renew independent of the request context.*/
 					background_renew_ctx, _ := context.WithTimeout(context.Background(), LETSENCRYPT_BACKGROUND_RENEW_CERTIFICATE_TIMEOUT*5)
-					cert, err := acmeService.CreateCertificate(background_renew_ctx	, domainsToObtain, "")
+					cert, err := acmeService.CreateCertificate(background_renew_ctx, domainsToObtain, "")
 					if err == nil {
 						logrus.Infof("Background certificate obtained for: %v", cert.Leaf.DNSNames)
 						certificateCachePut(baseDomain, cert)

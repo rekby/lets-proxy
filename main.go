@@ -27,6 +27,8 @@ import (
 	"bufio"
 	"sort"
 
+	"net/textproto"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/golang-lru"
 	"github.com/kardianos/service"
@@ -47,72 +49,10 @@ const (
 	DAEMON_KEY_NAME                                  = "daemon"
 )
 
-var (
-	acmeParallelCount             = flag.Int("acme-parallel", 10, "Count of parallel requests for ACME server")
-	acmeServerUrl                 = flag.String("acme-server", LETSENCRYPT_PRODUCTION_API_URL, "")
-	acmeSslCheckDisable           = flag.Bool("acme-sslcheck-disable", false, "Disable check of ACME server certificate")
-	additionalHeadersParam        = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Separate multiple headers by comma.")
-	allowIPRefreshInterval        = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often ip addresses will be refreshed. Format https://golang.org/pkg/time/#ParseDuration.")
-	allowIPsString                = flag.String("allowed-ips", "auto", "Allowable ip addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, the logic may change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to http://ifconfig.io/ip - it's needed for public ip auto-detection behind NAT.")
-	bindToS                       = flag.String("bind-to", ":443", "List of ports, ip addresses or port:ip separated by comma. For example: 1.1.1.1,2.2.2.2,3.3.3.3:443,4.4.4.4. Ports other then 443 may be used only if tcp-connections proxied from port 443 (iptables,nginx,socat and so on) because Let's Encrypt now checks connections using port 443 only.")
-	blockBadDomainDuration        = flag.Duration("block-bad-domain-duration", time.Hour, "Disable trying to obtain certificate for a domain after error")
-	certDir                       = flag.String("cert-dir", "certificates", `Directory for saved cached certificates. Set cert-dir=- to disable saving of certificates.`)
-	certJsonSave                  = flag.Bool("cert-json", false, "Save JSON information about certificate near the certificate file with same name with .json extension")
-	connectionIdHeader            = flag.String("connection-id-header", "", "Header name used for sending connection id to backend in HTTP proxy mode. Default it isn't send.")
-	daemonFlag                    = flag.Bool(DAEMON_KEY_NAME, false, "Start as background daemon. Supported in Unix OS only.")
-	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain isn't available (has zero length). For example client doesn't support SNI. It is used to obtain a certificate only. It isn't force set header HOST in request.")
-	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind NAT.")
-	inMemoryCertCount             = flag.Int("in-memory-cnt", 100, "How many certificates should be cached in memory, to preveent parsing from file")
-	initOnly                      = flag.Bool("init-only", false, "Exit after initialize, generate self keys. Need for auto-test environment.")
-	keepAliveModeS                = flag.String("keepalive", KEEPALIVE_NO_BACKEND_STRING, KEEPALIVE_TRANSPARENT_STRING+" - keepalive from user to server if both support else doesn't keepalive. In this mode server side need keep alive time more, then lets-proxy. Now it isn't detect close connection on server side while wait next customer's request. It is not well worked mode."+KEEPALIVE_NO_BACKEND_STRING+" - force doesn't use keepalive connection to backend, but can handle keepalive from user.")
-	keepAliveCustomerTimeout      = flag.Duration("keepalive-customer-timeout", time.Minute*5, "When keepalive in mode '"+KEEPALIVE_NO_BACKEND_STRING+"' - how long should the connection be maintained. In '"+KEEPALIVE_TRANSPARENT_STRING+"' mode, timeout isn't used and both connections close when either the backend or customer close self connection.")
-	logLevel                      = flag.String("loglevel", "warning", "fatal|error|warning|info|debug")
-	logOutput                     = flag.String("logout", "-", "Path to logout. Special: '-' (without quotes) - stderr")
-	logrotateMaxAge               = flag.Int("logrotate-age", 30, "How many days keep old backups")
-	logrotateMaxCount             = flag.Int("logrotate-count", 30, "How many old backups to keep. 0 for keep infinitely.")
-	logrotateMb                   = flag.Int("logrotate-mb", 100, "logrotate by size in megabytes. 0 means log rotation on size is off.")
-	logrotateTime                 = flag.String("logrotate-time", "", "minutely|hourly|daily|weekly|monthly|yearly|\"\", empty or none means no log rotation by time. Weekly - rotate log at midnight from Sunday to Monday")
-	maxRequestTime                = flag.Duration("max-request-body-time", time.Hour, "Max time, that customer can send request body.")
-	minTLSVersion                 = flag.String("min-tls", "", "Minimum supported TLS version: ssl3,tls10,tls11,tls12. Default is GoLang's default.")
-	noLogStderr                   = flag.Bool("no-log-stderr", false, "Suppress logging to stderr")
-	nonCertDomains                = flag.String("non-cert-domains", "", "Do not obtain certificates for matched domains. Regexpes separated by comma.")
-	pidFilePath                   = flag.String("pid-file", "lets-proxy.pid", "Write pid of process. When used with --daemon, lock the file to prevent starting daemon more than once.")
-	preventIDNDecode              = flag.Bool("prevent-idn-decode", false, "Default domain shows in log as 'domain.com' or 'xn--d1acufc.xn--p1ai' ('домен.рф'). When option used it will show as 'domain.com' or 'xn--d1acufc.xn--p1ai', without decode idn domains.")
-	privateKeyBits                = flag.Int("private-key-len", 2048, "Length of private keys in bits")
-	profilerBindAddress           = flag.String("profiler-bind", "", "Address for get of profiler dump by http. Profiler disable if empty.")
-	profilerPassword              = flag.String("profiler-password", "", "Password for get access to profiler info. Profiler disable if empty. Usage go tool pprof http://<Addr>/debug/pprof/...?password=<password>. For example: http://127.0.0.1:3123/debug/pprof/heap?password=123")
-	proxyMode                     = flag.String("proxy-mode", "http", "Proxy-mode after TLS handled (http|tcp).")
-	realIPHeader                  = flag.String("real-ip-header", "X-Real-IP", "The header will contain original IP of remote connection. Multiple headers are separated with a comma.")
-	runAs                         = flag.String("runas", "", "Run as a different user. This works only for --daemon, and only for Unix and requires to run from specified user or root. It can be user login or user id. It also changes default work dir to home folder of the user (can be changed by explicit --"+WORKING_DIR_ARG_NAME+"). Run will fail if use this option without --daemon.")
-	serviceAction                 = flag.String("service-action", "", "Start, stop, install, uninstall, reinstall")
-	serviceName                   = flag.String("service-name", SERVICE_NAME_EXAMPLE, "Service name is required for service actions")
-	stateFilePath                 = flag.String("state-file", "state.json", "Filename and path to which we save some state data. For example account key.")
-	subdomainsUnionS              = flag.String("subdomains-union", "www", "Comma-separated subdomains for which we try to obtain certificate on a single domain name. For example, if we receive a request to domain.com we try to obtain certificate valid for both www.domain.com and domain.com at same time, and save them in one certificate named domain.com. Changing option on running program will require that new certificates be obtained for added/removed subdomains.")
-	targetConnString              = flag.String("target", ":80", "IP, :port or IP:port. Default port is 80. Default IP is the ip address which receives the connection.")
-	mapTargetS                    = flag.String("target-map", "", "Remap target for some received ip:port. Format is receiveIP[:receivePort]=targetIP[:targetPort]. Can pass multiple remap rules, separated by comma. Format is --map=1.2.3.10=127.0.0.1,1.2.3.11=127.0.0.2:8999")
-	targetConnTimeout             = flag.Duration("target-conn-timeout", time.Second, "")
-	tcpKeepAliveInterval          = flag.Duration("tcp-keepalive-interval", time.Minute, "Interval between send TCP keepalive packages detect dead connections")
-	acmeTestServer                = flag.Bool("test", false, "Use test Let's Encrypt server instead of <acme-server>")
-	timeToRenew                   = flag.Duration("time-to-renew", time.Hour*24*30, "Time to end of certificate for background renewal")
-	versionPrint                  = flag.Bool("version", false, "Print version and exit")
-	whiteList                     = flag.String("whitelist-domains", "", "Allow request certificate for the domains without any check by --non-cert-domains. Requires a list all domains including subdomains (for example domain.com,www.domain.com). This parameter doesn't reject other domains. To reject other domains use parameter --non-cert-domains. To reject all domains except those in the whitelist use --non-cert-domains=\".*\"")
-	whiteListFile                 = flag.String("whitelist-domains-file", "", "Same as --whitelist-domains but domains are read from file. One domain per line. File may updated without restarting lets-proxy")
-	workingDir                    = flag.String(WORKING_DIR_ARG_NAME, "", "Set working directory")
-)
-
-var (
-	realIPHeaderNames [][]byte // IP headers, generated by the proxy, included real IP address
-	cutHeaders        [][]byte // internal - all headers, that cut from request (upper case).
-	additionalHeaders []byte   // prepared additional headers
-
-	whiteListFromParam        []string
-	acmeService               *acmeStruct
-	nonCertDomainsRegexps     []*regexp.Regexp
-	paramTargetTcpAddr        *net.TCPAddr
-	subdomainPrefixedForUnion []string
-	bindTo                    []net.TCPAddr
-	globalConnectionNumber    int64
-	targetMap                 map[string]*net.TCPAddr
+const (
+	PROXYMODE_HTTP         = "http"
+	PROXYMODE_HTTP_BUILTIN = "http-built-in"
+	PROXYMODE_TCP          = "tcp"
 )
 
 // constants in var
@@ -366,6 +306,17 @@ func main() {
 }
 
 func acceptConnections(listeners []*net.TCPListener) {
+	switch *proxyMode {
+	case PROXYMODE_HTTP, PROXYMODE_TCP:
+		acceptConnectionsOwn(listeners)
+	case PROXYMODE_HTTP_BUILTIN:
+		acceptConnectionsBuiltinProxy(listeners)
+	default:
+		logrus.Fatalf("Bad proxy mode: %v", *proxyMode)
+	}
+}
+
+func acceptConnectionsOwn(listeners []*net.TCPListener) {
 	for _, listener := range listeners {
 		go acceptConnectionsFromAListener(listener)
 	}
@@ -481,7 +432,7 @@ checkCertInCache:
 
 					/* Background renew independent of the request context.*/
 					background_renew_ctx, _ := context.WithTimeout(context.Background(), LETSENCRYPT_BACKGROUND_RENEW_CERTIFICATE_TIMEOUT*5)
-					cert, err := acmeService.CreateCertificate(background_renew_ctx	, domainsToObtain, "")
+					cert, err := acmeService.CreateCertificate(background_renew_ctx, domainsToObtain, "")
 					if err == nil {
 						logrus.Infof("Background certificate obtained for: %v", cert.Leaf.DNSNames)
 						certificateCachePut(baseDomain, cert)
@@ -615,24 +566,45 @@ forRegexpCheckDomain:
 	return cert, err
 }
 
-func getTargetAddr(cid ConnectionID, in *net.TCPConn) (net.TCPAddr, error) {
+func createTlsConfig() *tls.Config {
+	tlsConfig := &tls.Config{
+		GetCertificate: certificateGet,
+	}
+	switch strings.TrimSpace(*minTLSVersion) {
+	case "":
+	// pass
+	case "ssl3":
+		tlsConfig.MinVersion = tls.VersionSSL30
+	case "tls10":
+		tlsConfig.MinVersion = tls.VersionTLS10
+	case "tls11":
+		tlsConfig.MinVersion = tls.VersionTLS11
+	case "tls12":
+		tlsConfig.MinVersion = tls.VersionTLS12
+	default:
+		logrus.Fatalf("Doesn't know tls version '%v', use default. cid '%v'", *minTLSVersion)
+	}
+	return tlsConfig
+}
+
+func getTargetAddr(cid ConnectionID, in net.Addr) (net.TCPAddr, error) {
 	var target net.TCPAddr
 
 	var mappedTarget *net.TCPAddr
 	if targetMap != nil {
-		mappedTarget = targetMap[in.LocalAddr().String()]
+		mappedTarget = targetMap[in.String()]
 	}
 	if mappedTarget == nil {
 		target = *paramTargetTcpAddr
 	} else {
 		target = *mappedTarget
-		logrus.Debugf("Select target address by target map (cid %v) '%v' -> '%v'", cid, in.LocalAddr(), target)
+		logrus.Debugf("Select target address by target map (cid %v) '%v' -> '%v'", cid, in, target)
 	}
 
 	if target.IP == nil || target.IP.IsUnspecified() {
-		receiveAddr, ok := in.LocalAddr().(*net.TCPAddr)
+		receiveAddr, ok := in.(*net.TCPAddr)
 		if !ok {
-			logrus.Errorf("Can't cast incoming addr to tcp addr: '%v'", in.LocalAddr())
+			logrus.Errorf("Can't cast incoming addr to tcp addr: '%v'", in)
 			return net.TCPAddr{}, errors.New("Can't cast incoming addr to tcp addr")
 		}
 		target.IP = receiveAddr.IP
@@ -644,7 +616,7 @@ func getTargetAddr(cid ConnectionID, in *net.TCPConn) (net.TCPAddr, error) {
 		target.Port = paramTargetTcpAddr.Port
 	}
 
-	logrus.Debugf("Target address for '%v' (cid '%v'): %v", in.RemoteAddr(), cid, target)
+	logrus.Debugf("Target address for '%v' (cid '%v'): %v", in, cid, target)
 	return target, nil
 }
 
@@ -654,31 +626,14 @@ func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
 	in.SetKeepAlive(true)
 	in.SetKeepAlivePeriod(*tcpKeepAliveInterval)
 
-	target, err := getTargetAddr(cid, in)
+	target, err := getTargetAddr(cid, in.LocalAddr())
 	if err != nil {
 		logrus.Errorf("Can't get target IP/port for '%v' (cid '%v'): %v", in.RemoteAddr(), cid, err)
 		return
 	}
 
 	// handle ssl
-	tlsConfig := tls.Config{
-		GetCertificate: certificateGet,
-	}
-	switch strings.TrimSpace(*minTLSVersion) {
-	case "":
-		// pass
-	case "ssl3":
-		tlsConfig.MinVersion = tls.VersionSSL30
-	case "tls10":
-		tlsConfig.MinVersion = tls.VersionTLS10
-	case "tls11":
-		tlsConfig.MinVersion = tls.VersionTLS11
-	case "tls12":
-		tlsConfig.MinVersion = tls.VersionTLS12
-	default:
-		logrus.Errorf("Doesn't know tls version '%v', use default. cid '%v'", *minTLSVersion, cid)
-	}
-	tlsConn := tls.Server(in, &tlsConfig)
+	tlsConn := tls.Server(in, createTlsConfig())
 	err = tlsConn.Handshake()
 	logrus.Debugf("tls ciper, cid %v: %v", cid, tlsConn.ConnectionState().CipherSuite)
 	if err == nil {
@@ -701,7 +656,7 @@ func prepare() {
 	var err error
 
 	// Init
-	if *proxyMode != "http" && *proxyMode != "tcp" {
+	if *proxyMode != PROXYMODE_HTTP && *proxyMode != PROXYMODE_TCP && *proxyMode != PROXYMODE_HTTP_BUILTIN {
 		logrus.Panicf("Unknow proxy mode: %v", *proxyMode)
 	}
 	logrus.Infof("Proxy mode: %v", *proxyMode)
@@ -732,22 +687,30 @@ func prepare() {
 		if line != "" {
 			realIPHeaderNames = append(realIPHeaderNames, []byte(line))
 			cutHeaders = append(realIPHeaderNames, []byte(strings.ToUpper(line)))
+			if !strings.EqualFold(line, "X-Forwarded-For") { // X-Forwarded-For - appended auto by reverse proxy
+				realIPHeaderNamesStrings = append(realIPHeaderNamesStrings, textproto.CanonicalMIMEHeaderKey(line))
+			}
 		}
 	}
 
 	for _, addHeader := range strings.Split(*additionalHeadersParam, ",") {
+		var headerName, headerVal string
+
 		headerParts := strings.SplitN(addHeader, "=", 2)
 		if len(headerParts) > 0 {
 			cutHeaders = append(cutHeaders, []byte(strings.ToUpper(headerParts[0])))
+			headerName = headerParts[0]
 		}
 		buf := &bytes.Buffer{}
 		buf.WriteString(headerParts[0])
 		buf.WriteByte(':')
 		if len(headerParts) == 2 {
 			buf.WriteString(headerParts[1])
+			headerVal = headerParts[1]
 		}
 		buf.WriteString("\r\n")
 		additionalHeaders = append(additionalHeaders, buf.Bytes()...)
+		additionalHeadersStringPairs = append(additionalHeadersStringPairs, [2]string{textproto.CanonicalMIMEHeaderKey(headerName), headerVal})
 	}
 
 	if *inMemoryCertCount > 0 {

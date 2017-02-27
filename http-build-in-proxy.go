@@ -52,6 +52,11 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 				domainPresent := DomainPresent(asciiDomain)
 				logrus.Infof("Start proxy from '%v' to '%v', %v", clientIP, targetAddrString, domainPresent)
 			}
+
+			if *connectionIdHeader != "" {
+				req.Header.Set(*connectionIdHeader, "TODO")
+			}
+
 		}
 
 		proxy.ModifyResponse = func(resp *http.Response) error {

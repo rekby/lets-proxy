@@ -7,6 +7,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 
+	"time"
+
 	"github.com/Sirupsen/logrus"
 )
 
@@ -26,12 +28,53 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 			}
 			req.URL.Scheme = "http"
 			req.URL.Host = tcpAddr.String()
+
+			if req.Header == nil {
+				req.Header = make(http.Header)
+			}
+			for _, pair := range additionalHeadersStringPairs {
+				req.Header.Set(pair[0], pair[1])
+			}
+
+			if clientIP, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+				for _, realIpHeader := range realIPHeaderNamesStrings {
+					req.Header.Set(realIpHeader, clientIP)
+				}
+			}
 		}
 
 		tlsListener := tls.NewListener(tcpKeepAliveListener{listener}, createTlsConfig())
+
 		server := http.Server{}
 		server.TLSConfig = createTlsConfig()
 		server.Handler = proxy
+
+		switch keepAliveMode {
+		case KEEPALIVE_TRANSPARENT:
+			// pass. Do native.
+		case KEEPALIVE_NO_BACKEND:
+			// copy default transport + disable keepalive
+			proxy.Transport = &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+					DualStack: true,
+				}).DialContext,
+				MaxIdleConns:          100,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+
+				// force disable keepalive
+				DisableKeepAlives: true,
+			}
+		default:
+			logrus.Errorf("Unknow keep alive mode for buil-in proxy: %v (%v)", *keepAliveModeS, keepAliveMode)
+		}
+
+		server.ReadTimeout = *maxRequestTime
+
 		go server.Serve(tlsListener)
 	}
 

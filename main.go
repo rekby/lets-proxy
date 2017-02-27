@@ -27,6 +27,8 @@ import (
 	"bufio"
 	"sort"
 
+	"net/textproto"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/golang-lru"
 	"github.com/kardianos/service"
@@ -685,22 +687,30 @@ func prepare() {
 		if line != "" {
 			realIPHeaderNames = append(realIPHeaderNames, []byte(line))
 			cutHeaders = append(realIPHeaderNames, []byte(strings.ToUpper(line)))
+			if !strings.EqualFold(line, "X-Forwarded-For") { // X-Forwarded-For - appended auto by reverse proxy
+				realIPHeaderNamesStrings = append(realIPHeaderNamesStrings, textproto.CanonicalMIMEHeaderKey(line))
+			}
 		}
 	}
 
 	for _, addHeader := range strings.Split(*additionalHeadersParam, ",") {
+		var headerName, headerVal string
+
 		headerParts := strings.SplitN(addHeader, "=", 2)
 		if len(headerParts) > 0 {
 			cutHeaders = append(cutHeaders, []byte(strings.ToUpper(headerParts[0])))
+			headerName = headerParts[0]
 		}
 		buf := &bytes.Buffer{}
 		buf.WriteString(headerParts[0])
 		buf.WriteByte(':')
 		if len(headerParts) == 2 {
 			buf.WriteString(headerParts[1])
+			headerVal = headerParts[1]
 		}
 		buf.WriteString("\r\n")
 		additionalHeaders = append(additionalHeaders, buf.Bytes()...)
+		additionalHeadersStringPairs = append(additionalHeadersStringPairs, [2]string{textproto.CanonicalMIMEHeaderKey(headerName), headerVal})
 	}
 
 	if *inMemoryCertCount > 0 {

@@ -3,9 +3,10 @@ package main
 import (
 	"crypto/tls"
 	"net"
-	"net/http"
-	"net/http/httputil"
 	"net/url"
+
+	"github.com/rekby/lets-proxy/http-copy"
+	"github.com/rekby/lets-proxy/http-copy/httputil"
 
 	"time"
 
@@ -17,14 +18,17 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 	for index := range listeners {
 		listener := listeners[index]
 
-		tcpAddr, err := getTargetAddr(ConnectionID("none"), listener.Addr())
-		if err != nil {
-			logrus.Errorf("Can't map listener addr to target '%v': %v", listener.Addr(), err)
-		}
-
 		proxy := &httputil.ReverseProxy{}
-		targetAddrString := tcpAddr.String()
 		proxy.Director = func(req *http.Request) {
+			// from local modify in http-copy
+			localAddr := req.Context().Value("lets-proxy-local-ip").(net.Addr)
+			targetAddr, err := getTargetAddr(ConnectionID("none"), localAddr)
+			if err != nil {
+				logrus.Errorf("Can't map local addr to target addr '%v': %v", localAddr, err)
+				req.URL = nil
+			}
+			targetAddrString := targetAddr.String()
+
 			if req.URL == nil {
 				req.URL = &url.URL{}
 			}

@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http/internal"
 	"net/textproto"
 	"sort"
 	"strconv"
@@ -19,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rekby/lets-proxy/http-copy/internal"
 	"golang_org/x/net/lex/httplex"
 )
 

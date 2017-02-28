@@ -11,11 +11,12 @@ import (
 	"io"
 	"log"
 	"net"
-	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rekby/lets-proxy/http-copy"
 )
 
 // onExitFlushLoop is a callback set by tests to detect the state of the

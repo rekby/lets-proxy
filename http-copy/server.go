@@ -2638,12 +2638,11 @@ func (srv *Server) Serve(l net.Listener) error {
 
 	baseCtx := context.Background() // base is always background, per Issue 16220
 	ctx := context.WithValue(baseCtx, ServerContextKey, srv)
-	ctx = context.WithValue(ctx, LocalAddrContextKey, l.Addr())
+	// https://go-review.googlesource.com/#/c/35490/
+	// ctx = context.WithValue(ctx, LocalAddrContextKey, l.Addr())
 	for {
 		rw, e := l.Accept()
 
-		// REKBY lets-proxy added
-		connectCtx := context.WithValue(ctx, "lets-proxy-local-ip", rw.LocalAddr())
 		if e != nil {
 			select {
 			case <-srv.getDoneChan():
@@ -2669,9 +2668,9 @@ func (srv *Server) Serve(l net.Listener) error {
 		c := srv.newConn(rw)
 		c.setState(c.rwc, StateNew) // before Serve can return
 
-		// REKBY lets-proxy changed
-		//go c.serve(ctx)
-		go c.serve(connectCtx)
+		// https://go-review.googlesource.com/#/c/35490/
+		ctx := context.WithValue(ctx, LocalAddrContextKey, rw.LocalAddr())
+		go c.serve(ctx)
 	}
 }
 

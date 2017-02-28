@@ -21,7 +21,10 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 		proxy := &httputil.ReverseProxy{}
 		proxy.Director = func(req *http.Request) {
 			// from local modify in http-copy
-			localAddr := req.Context().Value("lets-proxy-local-ip").(net.Addr)
+			// applied // https://go-review.googlesource.com/#/c/35490/
+			// issue planned solve to go 1.9
+			// https://github.com/golang/go/issues/18686
+			localAddr := req.Context().Value(http.LocalAddrContextKey).(net.Addr)
 			targetAddr, err := getTargetAddr(ConnectionID("none"), localAddr)
 			if err != nil {
 				logrus.Errorf("Can't map local addr to target addr '%v': %v", localAddr, err)

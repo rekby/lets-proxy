@@ -2641,6 +2641,9 @@ func (srv *Server) Serve(l net.Listener) error {
 	ctx = context.WithValue(ctx, LocalAddrContextKey, l.Addr())
 	for {
 		rw, e := l.Accept()
+
+		// REKBY lets-proxy added
+		connectCtx := context.WithValue(ctx, "lets-proxy-local-ip", rw.LocalAddr())
 		if e != nil {
 			select {
 			case <-srv.getDoneChan():
@@ -2665,7 +2668,10 @@ func (srv *Server) Serve(l net.Listener) error {
 		tempDelay = 0
 		c := srv.newConn(rw)
 		c.setState(c.rwc, StateNew) // before Serve can return
-		go c.serve(ctx)
+
+		// REKBY lets-proxy changed
+		//go c.serve(ctx)
+		go c.serve(connectCtx)
 	}
 }
 

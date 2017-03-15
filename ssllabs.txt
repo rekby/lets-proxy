@@ -1,0 +1,34 @@
+SSL Server Test
+---------------
+uri:
+https://www.ssllabs.com/ssltest/analyze.html?d=%DOMAIN%
+
+
+Certificate
+-----------
+options:
+
+
+Protocol Support
+----------------
+options:
+-min-tls tls10  # Protocol Support - 90%
+-min-tls tls11  # Protocol Support - 95%
+-min-tls tls12  # Protocol Support - 100%
+
+
+Key Exchange
+------------
+options:
+-private-key-len 2048  # (default) +384 EC - 90%
+-private-key-len 4096  # +384 EC - 100%
+
+
+Cipher Strength
+---------------
+options:
+# -DES
+# -AES128
+
+
+### s0t 2017-03-15 ###

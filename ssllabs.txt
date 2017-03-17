@@ -12,8 +12,8 @@ options:
 Protocol Support
 ----------------
 options:
--min-tls tls10  # Protocol Support - 90%
--min-tls tls11  # Protocol Support - 95%
+-min-tls tls10  # Protocol Support - 95%
+-min-tls tls11  # Protocol Support - 97%
 -min-tls tls12  # Protocol Support - 100%
 
 
@@ -31,4 +31,4 @@ options:
 # -AES128
 
 
-### s0t 2017-03-15 ###
+### s0t 2017-03-17 ###

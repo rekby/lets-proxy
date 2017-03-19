@@ -546,7 +546,7 @@ forRegexpCheckDomain:
 
 	cert, err = acmeService.CreateCertificate(ctx, allowedDomains, domain)
 	if err == nil {
-		certificateCachePut(domainsToObtain[0], cert)
+		certificateCachePut(baseDomain, cert)
 
 		domainsForBlock := []string{}
 		for _, checkDomain := range allowedDomains {
@@ -570,6 +570,7 @@ func createTlsConfig() *tls.Config {
 	tlsConfig := &tls.Config{
 		GetCertificate: certificateGet,
 	}
+	tlsConfig.CurvePreferences = []tls.CurveID{tls.CurveP384}
 	switch strings.TrimSpace(*minTLSVersion) {
 	case "":
 	// pass

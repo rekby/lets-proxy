@@ -20,9 +20,7 @@ options:
 Key Exchange
 ------------
 options:
--private-key-len 2048  # (default) +384 EC - 90%
--private-key-len 4096  # +384 EC - 100%
-
+-private-key-len 4096 -crypto-curves CURVEP521,CURVEP384 # Key Exchange 100%
 
 Cipher Strength
 ---------------

@@ -19,6 +19,7 @@ var (
 	certDir                       = flag.String("cert-dir", "certificates", `Directory for saved cached certificates. Set cert-dir=- to disable saving of certificates.`)
 	certJsonSave                  = flag.Bool("cert-json", false, "Save JSON information about certificate near the certificate file with same name with .json extension")
 	connectionIdHeader            = flag.String("connection-id-header", "", "Header name used for sending connection id to backend in HTTP proxy mode. Default it isn't send.")
+	cryptoCurvePreferences        = flag.String("crypto-curves", "", "Names or integer values of CurveID, separated by comma. If empty - default usage. https://golang.org/pkg/crypto/tls/#CurveID")
 	daemonFlag                    = flag.Bool(DAEMON_KEY_NAME, false, "Start as background daemon. Supported in Unix OS only.")
 	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain isn't available (has zero length). For example client doesn't support SNI. It is used to obtain a certificate only. It isn't force set header HOST in request.")
 	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind NAT.")

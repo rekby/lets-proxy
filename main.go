@@ -570,7 +570,32 @@ func createTlsConfig() *tls.Config {
 	tlsConfig := &tls.Config{
 		GetCertificate: certificateGet,
 	}
-	tlsConfig.CurvePreferences = []tls.CurveID{tls.CurveP384}
+
+	// Map of supported curves
+	// https://golang.org/pkg/crypto/tls/#CurveID
+	var supportedCurvesMap = map[string]tls.CurveID{
+		"X25519":    tls.X25519,
+		"CURVEP256": tls.CurveP256,
+		"CURVEP384": tls.CurveP384,
+		"CURVEP521": tls.CurveP521,
+	}
+	for _, name := range strings.Split(*cryptoCurvePreferences, ",") {
+		nameUpper := strings.ToUpper(strings.TrimSpace(name))
+		if nameUpper == "" {
+			continue
+		}
+
+		if val, ok := supportedCurvesMap[nameUpper]; ok {
+			tlsConfig.CurvePreferences = append(tlsConfig.CurvePreferences, val)
+			continue
+		}
+		if intVal, err := strconv.ParseUint(nameUpper, 10, 16); err == nil {
+			tlsConfig.CurvePreferences = append(tlsConfig.CurvePreferences, tls.CurveID(intVal))
+			continue
+		}
+		logrus.Fatalf("Unknown curve name: '%s'", name)
+	}
+
 	switch strings.TrimSpace(*minTLSVersion) {
 	case "":
 	// pass

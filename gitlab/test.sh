@@ -85,6 +85,23 @@ function exit_error(){
 
 go build -o proxy github.com/rekby/lets-proxy
 ./proxy --init-only # Generate keys. It need longer then one second - sleep time in restart. It need wait until process complete.
+./proxy --stderr-to-file=panic.txt --panic || true
+
+if ! grep -q "Test panic" panic.txt; then
+    echo "TEST PANIC FAILED"
+    exit_error
+fi
+
+rm -f panic.txt
+
+./proxy --stderr-to-file=panic.txt --panic --daemon
+sleep 5
+
+if ! grep -q "Test panic" panic.txt; then
+    echo "TEST DAEMON PANIC FAILED"
+    exit_error
+fi
+
 
 function restart_proxy(){
     PID=`cat lets-proxy.pid`

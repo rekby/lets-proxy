@@ -32,6 +32,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/golang-lru"
 	"github.com/kardianos/service"
+	"github.com/rekby/panichandler"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -58,6 +59,10 @@ const (
 // constants in var
 var (
 	VERSION = "unversioned" // need be var becouse it redefine by --ldflags "-X main.VERSION" during autobuild
+)
+
+var (
+	stdErrFileGlobal *os.File // global variable - for not close file for stderr redirect while app working
 )
 
 type stateStruct struct {
@@ -134,14 +139,18 @@ func main() {
 
 	logouts := []io.Writer{}
 	if *noLogStderr || isDaemon { // Run as windows-service or unix-daemon
-		// pass - no log to stderr
+		// don't append os.Stderr to logouts
 	} else {
 		logouts = append(logouts, os.Stderr)
 	}
 
+	var logFileName string
 	if *logOutput != "-" {
+		logFileName = *logOutput
+	}
+	if logFileName != "" {
 		lr := &lumberjack.Logger{
-			Filename:   *logOutput,
+			Filename:   logFileName,
 			MaxSize:    *logrotateMb,
 			MaxAge:     *logrotateMaxAge,
 			MaxBackups: *logrotateMaxCount,
@@ -157,7 +166,7 @@ func main() {
 			logouts = append(logouts, lr)
 			go startTimeLogRotator(lr)
 		} else {
-			logrus.Errorf("Can't log to file '%v': %v", *logOutput, err)
+			logrus.Errorf("Can't log to file '%v': %v", logFileName, err)
 		}
 	}
 
@@ -173,6 +182,23 @@ func main() {
 
 	logrus.Infof("Use log level: '%v'", logrus.GetLevel())
 	logrus.Info("Version: ", VERSION)
+
+	if *stdErrToFile != "" {
+		var err error
+		stdErrFileGlobal, err = os.OpenFile(*stdErrToFile, os.O_APPEND|os.O_CREATE, 0600) // mode 0644 copied from lubmerjeck log
+		if err == nil {
+			err = panichandler.RedirectStderr(stdErrFileGlobal)
+		}
+		if err == nil {
+			logrus.Infof("Redirect stderr to file '%v'", *stdErrToFile)
+		} else {
+			logrus.Errorf("Can't redirect stderr to file '%v': %v", *stdErrToFile, err)
+		}
+	}
+
+	if *panicTest {
+		panic("Test panic by --panic key")
+	}
 
 	if *runAs != "" && !*daemonFlag {
 		logrus.Fatal("Key --runas used without --daemon key. It isn't supported.")

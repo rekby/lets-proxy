@@ -183,17 +183,20 @@ func main() {
 	logrus.Infof("Use log level: '%v'", logrus.GetLevel())
 	logrus.Info("Version: ", VERSION)
 
-	if *stdErrToFile != "" {
+	// for unix redirect when daemon child start
+	if *stdErrToFile != "" && runtime.GOOS == "windows" {
+		fName := filepath.Join(*workingDir, *stdErrToFile)
 		var err error
-		stdErrFileGlobal, err = os.OpenFile(*stdErrToFile, os.O_APPEND|os.O_CREATE, 0600) // mode 0644 copied from lubmerjeck log
+		stdErrFileGlobal, err = os.OpenFile(fName, os.O_APPEND|os.O_CREATE, 0600) // mode 0644 copied from lubmerjeck log
 		if err == nil {
 			err = panichandler.RedirectStderr(stdErrFileGlobal)
 		}
 		if err == nil {
-			logrus.Infof("Redirect stderr to file '%v'", *stdErrToFile)
+			logrus.Infof("Redirect stderr to file '%v'", fName)
 		} else {
-			logrus.Errorf("Can't redirect stderr to file '%v': %v", *stdErrToFile, err)
+			logrus.Errorf("Can't redirect stderr to file '%v': %v", fName, err)
 		}
+		logrus.Debug("Sleep a second - need for complete redirect stderr")
 	}
 
 	if *panicTest {

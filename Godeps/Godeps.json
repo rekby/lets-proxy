@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/rekby/lets-proxy",
-	"GoVersion": "go1.7",
+	"GoVersion": "go1.8",
 	"GodepVersion": "v74",
 	"Deps": [
 		{
@@ -67,6 +67,10 @@
 		{
 			"ImportPath": "github.com/rekby/pair-connections",
 			"Rev": "152f445fd49b512da5a160b6e4e5a7ec9ccb463a"
+		},
+		{
+			"ImportPath": "github.com/rekby/panichandler",
+			"Rev": "9a591848d3321a8f26dc312e8a33b8beec996293"
 		},
 		{
 			"ImportPath": "github.com/sevlyar/go-daemon",

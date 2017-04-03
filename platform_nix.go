@@ -63,7 +63,12 @@ func daemonize() bool {
 	}
 
 	if *stdErrToFile != "" {
-		daemonContext.LogFileName = filepath.Join(daemonContext.WorkDir, *stdErrToFile)
+		if filepath.IsAbs(*stdErrToFile) {
+			daemonContext.LogFileName = filepath.Join(daemonContext.WorkDir, *stdErrToFile)
+		} else {
+			daemonContext.LogFileName = filepath.Join(daemonContext.WorkDir, *stdErrToFile)
+		}
+
 	}
 
 	child, err := daemonContext.Reborn()

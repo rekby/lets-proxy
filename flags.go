@@ -58,7 +58,7 @@ var (
 	acmeTestServer                = flag.Bool("test", false, "Use test Let's Encrypt server instead of <acme-server>")
 	timeToRenew                   = flag.Duration("time-to-renew", time.Hour*24*30, "Time to end of certificate for background renewal")
 	versionPrint                  = flag.Bool("version", false, "Print version and exit")
-	whiteList                     = flag.String("whitelist-domains", "", "Allow request certificate for the domains without any check by --non-cert-domains. Requires a list all domains including subdomains (for example domain.com,www.domain.com). This parameter doesn't reject other domains. To reject other domains use parameter --non-cert-domains. To reject all domains except those in the whitelist use --non-cert-domains=\".*\"")
+	whiteList                     = flag.String("whitelist-domains", "", `Allow request certificate for the domains without any check by --non-cert-domains. Requires a list all domains including subdomains (for example domain.com,www.domain.com). If domain start with 're:' then it check as regexp, for example: re:(www\.)-example-[0-9]*\.example\.com$. This parameter doesn't reject other domains. To reject other domains use parameter --non-cert-domains. To reject all domains except those in the whitelist use --non-cert-domains=".*"`)
 	whiteListFile                 = flag.String("whitelist-domains-file", "", "Same as --whitelist-domains but domains are read from file. One domain per line. File may updated without restarting lets-proxy")
 	workingDir                    = flag.String(WORKING_DIR_ARG_NAME, "", "Set working directory")
 )
@@ -72,6 +72,7 @@ var (
 	additionalHeadersStringPairs [][2]string
 
 	whiteListFromParam        []string
+	whiteListFromParamRe      []*regexp.Regexp
 	acmeService               *acmeStruct
 	nonCertDomainsRegexps     []*regexp.Regexp
 	paramTargetTcpAddr        *net.TCPAddr

@@ -82,6 +82,10 @@ func (nullWriter) Write(buf []byte) (int, error) {
 	return len(buf), nil
 }
 
+func HasPrefixFold(s, prefix string) bool {
+	return len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix)
+}
+
 func main() {
 	flag.Usage = usage
 	flag.Parse()
@@ -504,7 +508,7 @@ checkCertInCache:
 	}
 	defer obtainDomainsUnlock(domainsToObtain)
 
-	logrus.Debugf("Obtain certificate for domains: ", domainsToObtain)
+	logrus.Debugf("Obtain certificate for domains: %v", domainsToObtain)
 
 	// check if get cert between check cache and lock to obtain
 	cert = certificateCacheGet(baseDomain)
@@ -526,9 +530,22 @@ checkCertInCache:
 	allowedDomains := make([]string, 0, len(domainsToObtain))
 forRegexpCheckDomain:
 	for _, checkDomain := range domainsToObtain {
+		whiteList := false
+		blackList := false
 		if stringsSortedContains(whiteListFromParam, checkDomain) {
 			logrus.Debugf("Domain allowed by param whitelist: %v\n", checkDomain)
-		} else {
+			whiteList = true
+		}
+		if !whiteList {
+			for _, re := range whiteListFromParamRe {
+				if re.MatchString(checkDomain) {
+					logrus.Debugf("Domain allowed by whitelist param regexp '%v': %v", re, checkDomain)
+					whiteList = true
+					break
+				}
+			}
+		}
+		if !whiteList && !blackList {
 			for _, re := range nonCertDomainsRegexps {
 				if re.MatchString(checkDomain) {
 					logrus.Debugf("Reject obtain cert for domain %v by regexp '%v'", DomainPresent(domain), re.String())
@@ -556,13 +573,28 @@ forRegexpCheckDomain:
 			scanner := bufio.NewScanner(f)
 			for scanner.Scan() {
 				whiteListDomain := strings.TrimSpace(scanner.Text())
-				if stringsSortedContains(domainsToObtain, whiteListDomain) && !stringsSortedContains(allowedDomains, whiteListDomain) {
-					logrus.Debugf("Add domain from file whitelist: %v\n", whiteListDomain)
-					allowedDomains = stringsSortedAppend(allowedDomains, whiteListDomain)
-					if len(allowedDomains) == len(domainsToObtain) {
-						// don't read file to end if all domain allowed already
-						return
+				if HasPrefixFold(whiteListDomain, "re:") {
+					sRegexp := whiteListDomain[len("re:"):]
+					re, err := regexp.Compile(sRegexp)
+					if err == nil {
+						for _, checkDomain := range domainsToObtain {
+							if !stringsSortedContains(allowedDomains, checkDomain) && re.MatchString(checkDomain) {
+								logrus.Debugf("Add domain from file whitelist by regexp '%v': %v", re, checkDomain)
+								allowedDomains = stringsSortedAppend(allowedDomains, checkDomain)
+							}
+						}
+					} else {
+						logrus.Errorf("Error while compile regexp from whitelist file '%v': %v", sRegexp, err)
 					}
+				} else {
+					if stringsSortedContains(domainsToObtain, whiteListDomain) && !stringsSortedContains(allowedDomains, whiteListDomain) {
+						logrus.Debugf("Add domain from file whitelist: %v", whiteListDomain)
+						allowedDomains = stringsSortedAppend(allowedDomains, whiteListDomain)
+					}
+				}
+				if len(allowedDomains) == len(domainsToObtain) {
+					// don't read file to end if all domain allowed already
+					return
 				}
 			}
 		}()
@@ -816,11 +848,25 @@ func prepare() {
 
 	for _, whiteListDomain := range strings.Split(*whiteList, ",") {
 		whiteListDomain = strings.TrimSpace(whiteListDomain)
-		if whiteListDomain != "" {
+		if whiteListDomain == "" {
+			continue
+		}
+		if HasPrefixFold(whiteListDomain, "re:") {
+			sRegexp := whiteListDomain[len("re:"):]
+			re, err := regexp.Compile(sRegexp)
+			if err == nil {
+				whiteListFromParamRe = append(whiteListFromParamRe, re)
+			} else {
+				logrus.Errorf("Bad regexp in whitelist domain args '%v': %v", sRegexp, err)
+			}
+
+		} else {
 			whiteListFromParam = append(whiteListFromParam, whiteListDomain)
 		}
 	}
 	sort.Strings(whiteListFromParam)
+	logrus.Infof("Domains whitelist: %v", whiteListFromParam)
+	logrus.Infof("Domains whitelist regexps: %v", whiteListFromParamRe)
 
 	// init service
 	var state stateStruct

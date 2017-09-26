@@ -3,10 +3,9 @@ package main
 import (
 	"crypto/tls"
 	"net"
+	"net/http"
+	"net/http/httputil"
 	"net/url"
-
-	"github.com/rekby/lets-proxy/http-copy"
-	"github.com/rekby/lets-proxy/http-copy/httputil"
 
 	"time"
 

@@ -645,7 +645,7 @@ func createTlsConfig() *tls.Config {
 			tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // (0x9d) 256
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, // (0xc030) 256
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, // (0xcca8) 256
-		}
+		},
 	}
 
 	// Map of supported curves

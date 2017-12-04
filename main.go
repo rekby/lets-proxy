@@ -672,7 +672,7 @@ func createTlsConfig() *tls.Config {
 		logrus.Fatalf("Doesn't know tls version '%v', use default. cid '%v'", *minTLSVersion)
 	}
 	
-	tlsConfig.CipherSuites: []uint16 {
+	tlsConfig.CipherSuites = [
 		// 112
 //		tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA, // (0xa) 112 // WEAK
 //		tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA, // (0xc012) 112 // WEAK
@@ -686,8 +686,8 @@ func createTlsConfig() *tls.Config {
 		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA, // (0xc014) 256
 		tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // (0x9d) 256
 		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, // (0xc030) 256
-		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, // (0xcca8) 256
-        }
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 // (0xcca8) 256
+        ];
 	
 	return tlsConfig
 }

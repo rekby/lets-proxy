@@ -630,6 +630,22 @@ forRegexpCheckDomain:
 func createTlsConfig() *tls.Config {
 	tlsConfig := &tls.Config{
 		GetCertificate: certificateGet,
+		CipherSuites: []uint16 {
+		// 112
+//			tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA, // (0xa) 112 // WEAK
+//			tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA, // (0xc012) 112 // WEAK
+		// 128
+			tls.TLS_RSA_WITH_AES_128_CBC_SHA, // (0x2f) 128
+			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA, // (0xc013) 128
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256, // (0x9c) 128
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, // (0xc02f) 128
+		// 256
+			tls.TLS_RSA_WITH_AES_256_CBC_SHA, // (0x35) 256
+			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA, // (0xc014) 256
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // (0x9d) 256
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, // (0xc030) 256
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, // (0xcca8) 256
+		}
 	}
 
 	// Map of supported curves
@@ -671,24 +687,6 @@ func createTlsConfig() *tls.Config {
 	default:
 		logrus.Fatalf("Doesn't know tls version '%v', use default. cid '%v'", *minTLSVersion)
 	}
-	
-	tlsConfig.CipherSuites = [
-		// 112
-//		tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA, // (0xa) 112 // WEAK
-//		tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA, // (0xc012) 112 // WEAK
-		// 128
-		tls.TLS_RSA_WITH_AES_128_CBC_SHA, // (0x2f) 128
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA, // (0xc013) 128
-		tls.TLS_RSA_WITH_AES_128_GCM_SHA256, // (0x9c) 128
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, // (0xc02f) 128
-		// 256
-		tls.TLS_RSA_WITH_AES_256_CBC_SHA, // (0x35) 256
-		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA, // (0xc014) 256
-		tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // (0x9d) 256
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, // (0xc030) 256
-		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 // (0xcca8) 256
-        ];
-	
 	return tlsConfig
 }
 

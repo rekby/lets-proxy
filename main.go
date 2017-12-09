@@ -631,14 +631,18 @@ func createTlsConfig() *tls.Config {
 	tlsConfig := &tls.Config{
 		GetCertificate: certificateGet,
 		CipherSuites: []uint16 {
+/*
 		// 112
-//			tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA, // (0xa) // WEAK
-//			tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA, // (0xc012) // WEAK
+			tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA, // (0xa) // WEAK
+			tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA, // (0xc012) // WEAK
+*/
+/*			
 		// 128
 			tls.TLS_RSA_WITH_AES_128_CBC_SHA, // (0x2f)
 			tls.TLS_RSA_WITH_AES_128_GCM_SHA256, // (0x9c)
 			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA, // (0xc013)
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, // (0xc02f)
+*/
 		// 256
 			tls.TLS_RSA_WITH_AES_256_CBC_SHA, // (0x35)
 			tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // (0x9d)

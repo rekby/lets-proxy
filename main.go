@@ -638,18 +638,18 @@ func createTlsConfig() *tls.Config {
 */
 /*			
 		// 128
-			tls.TLS_RSA_WITH_AES_128_CBC_SHA, // (0x2f)
-			tls.TLS_RSA_WITH_AES_128_GCM_SHA256, // (0x9c)
+			tls.TLS_RSA_WITH_AES_128_CBC_SHA, // (0x2f) // WEEK
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256, // (0x9c) // WEEK
 			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA, // (0xc013)
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, // (0xc02f)
 */
 		// 256
-			tls.TLS_RSA_WITH_AES_256_CBC_SHA, // (0x35)
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // (0x9d)
+//			tls.TLS_RSA_WITH_AES_256_CBC_SHA, // (0x35) // WEEK
+//			tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // (0x9d) // WEEK
 			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA, // (0xc014)
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, // (0xc030)
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305, // (0xcca8)
-//			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305, // (0xcca9)
+/			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305, // (0xcca9)
 		},
 	}
 

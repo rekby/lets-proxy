@@ -4,6 +4,7 @@ import (
 	"flag"
 	"net"
 	"regexp"
+	"strconv"
 	"time"
 )
 
@@ -14,7 +15,8 @@ var (
 	additionalHeadersParam        = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Separate multiple headers by comma.")
 	allowIPRefreshInterval        = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often ip addresses will be refreshed. Format https://golang.org/pkg/time/#ParseDuration.")
 	allowIPsString                = flag.String("allowed-ips", "auto", "Allowable ip addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, the logic may change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to http://ifconfig.io/ip - it's needed for public ip auto-detection behind NAT.")
-	bindToS                       = flag.String("bind-to", ":443", "List of ports, ip addresses or port:ip separated by comma. For example: 1.1.1.1,2.2.2.2,3.3.3.3:443,4.4.4.4. Ports other then 443 may be used only if tcp-connections proxied from port 443 (iptables,nginx,socat and so on) because Let's Encrypt now checks connections using port 443 only.")
+	bindToS                       = flag.String("bind-to", ":"+strconv.Itoa(DEFAULT_BIND_PORT), "List of ports, ip addresses or port:ip separated by comma. For example: 1.1.1.1,2.2.2.2,3.3.3.3:443,4.4.4.4. Ports other then 443 may be used only if tcp-connections proxied from port 443 (iptables,nginx,socat and so on) because Let's Encrypt now checks connections using port 443 only.")
+	bindHttpValidationToS         = flag.String("bind-http-validation-to", "127.0.0.1:"+strconv.Itoa(DEFAULT_BIND_HTTP_VALIDATION_PORT), "Bind address for http-validation port. List of ports, ip addresses or port:ip separated by comma. Requests to <domain>/.well-known/acme-challenge/ must be redirect to this port for http-01 validation.")
 	blockBadDomainDuration        = flag.Duration("block-bad-domain-duration", time.Hour, "Disable trying to obtain certificate for a domain after error")
 	certDir                       = flag.String("cert-dir", "certificates", `Directory for saved cached certificates. Set cert-dir=- to disable saving of certificates.`)
 	certJsonSave                  = flag.Bool("cert-json", false, "Save JSON information about certificate near the certificate file with same name with .json extension")
@@ -78,6 +80,7 @@ var (
 	paramTargetTcpAddr        *net.TCPAddr
 	subdomainPrefixedForUnion []string
 	bindTo                    []net.TCPAddr
+	bindHttpValidationTo      []net.TCPAddr
 	globalConnectionNumber    int64
 	targetMap                 map[string]*net.TCPAddr
 )

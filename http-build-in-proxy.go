@@ -99,10 +99,6 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 
 		go server.Serve(tlsListener)
 	}
-
-	// block forever
-	var ch chan bool
-	<-ch
 }
 
 // tcpKeepAliveListener sets TCP keep-alive timeouts on accepted

@@ -47,6 +47,7 @@ const (
 	SERVICE_NAME_EXAMPLE                             = "<service-name>"
 	WORKING_DIR_ARG_NAME                             = "working-dir"
 	DEFAULT_BIND_PORT                                = 443
+	DEFAULT_BIND_HTTP_VALIDATION_PORT                = 4443
 	DAEMON_KEY_NAME                                  = "daemon"
 )
 
@@ -273,13 +274,13 @@ func main() {
 		logrus.Info("Start interactive mode")
 
 		// Simple start
-		listeners := startListeners()
-		if listeners == nil {
-			logrus.Error("Can't start listener:", err)
-			os.Exit(1)
+		err = startWork()
+		if err == nil {
+			// sleep forever
+			var sleepChan chan struct{}
+			<-sleepChan
 		} else {
-			acceptConnections(listeners)
-			return
+			os.Exit(1)
 		}
 
 	case "install":
@@ -338,7 +339,12 @@ func main() {
 
 }
 
-func acceptConnections(listeners []*net.TCPListener) {
+func acceptConnectionsOwn(listeners []*net.TCPListener) {
+	for _, listener := range listeners {
+		go acceptConnectionsFromAListener(listener)
+	}
+}
+func acceptConnectionsTLS(listeners []*net.TCPListener) {
 	switch *proxyMode {
 	case PROXYMODE_HTTP, PROXYMODE_TCP:
 		acceptConnectionsOwn(listeners)
@@ -347,16 +353,6 @@ func acceptConnections(listeners []*net.TCPListener) {
 	default:
 		logrus.Fatalf("Bad proxy mode: %v", *proxyMode)
 	}
-}
-
-func acceptConnectionsOwn(listeners []*net.TCPListener) {
-	for _, listener := range listeners {
-		go acceptConnectionsFromAListener(listener)
-	}
-
-	// force lock lifetime - to keep old behaviour
-	var ch chan bool
-	<-ch
 }
 
 func acceptConnectionsFromAListener(listener *net.TCPListener) {
@@ -881,40 +877,31 @@ func prepare() {
 	}
 
 	// bindTo
-	for _, addrS := range strings.Split(*bindToS, ",") {
-		addrTcp, err := net.ResolveTCPAddr("tcp", addrS)
-		if err == nil {
-			logrus.Debugf("Parse bind tcp addr '%v' -> '%v'", addrS, addrTcp)
-		} else {
-			addrIp, err := net.ResolveIPAddr("ip", addrS)
-			if addrIp != nil && err == nil {
-				addrTcp = &net.TCPAddr{
-					IP:   addrIp.IP,
-					Port: DEFAULT_BIND_PORT,
-				}
-				logrus.Debugf("Parse bind ip addr '%v' -> '%v'", addrS, addrTcp)
-			} else {
-				logrus.Errorf("Can't parse bind address '%v'", addrS)
-			}
-		}
-		if addrTcp != nil {
-			ipv4 := addrTcp.IP.To4()
-			if ipv4 != nil {
-				addrTcp.IP = ipv4
-			}
-			bindTo = append(bindTo, *addrTcp)
-		}
-	}
-
 	if *bindToS == "" {
 		bindTo = []net.TCPAddr{
 			{IP: net.IPv6unspecified, Port: DEFAULT_BIND_PORT},
 			{IP: net.IPv4zero, Port: DEFAULT_BIND_PORT},
 		}
+	} else {
+		bindTo = parseAddressList(*bindToS, DEFAULT_BIND_PORT)
 	}
 
 	if len(bindTo) == 0 {
 		logrus.Fatal("Nothing address to bind")
+	}
+
+	// bindHttpValidationTo
+	if *bindHttpValidationToS == "" {
+		bindHttpValidationTo = []net.TCPAddr{
+			{IP: net.IPv6unspecified, Port: DEFAULT_BIND_HTTP_VALIDATION_PORT},
+			{IP: net.IPv4zero, Port: DEFAULT_BIND_HTTP_VALIDATION_PORT},
+		}
+	} else {
+		bindHttpValidationTo = parseAddressList(*bindHttpValidationToS, DEFAULT_BIND_HTTP_VALIDATION_PORT)
+	}
+
+	if len(bindTo) == 0 {
+		logrus.Warningf("It has no bind port for http validation. Can use only tls validation.")
 	}
 
 	allowedIps := getAllowIPs()
@@ -1018,9 +1005,9 @@ func saveState(state stateStruct) {
 }
 
 // return nil if can't start any listeners
-func startListeners() []*net.TCPListener {
+func startListeners(addresses []net.TCPAddr) []*net.TCPListener {
 	listeners := make([]*net.TCPListener, 0, len(bindTo))
-	for _, bindAddr := range bindTo {
+	for _, bindAddr := range addresses {
 		// Start listen
 		logrus.Infof("Start listen: %v", bindAddr)
 
@@ -1068,6 +1055,26 @@ func startTimeLogRotator(logger *lumberjack.Logger) {
 		time.Sleep(sleepUntil.Sub(now))
 		logrus.Info("Rotate log:", *logrotateTime)
 		logger.Rotate()
+	}
+}
+
+func startWork() (err error) {
+	listeners := startListeners(bindTo)
+	listenersHttpValidation := startListeners(bindHttpValidationTo)
+
+	acceptConnectionsHttpValidation(listenersHttpValidation)
+
+	if listeners == nil {
+		var errText string
+		if err != nil {
+			errText = err.Error()
+		}
+		mess := "Can't start listener: " + errText
+		logrus.Error(mess)
+		return errors.New(mess)
+	} else {
+		acceptConnectionsTLS(listeners)
+		return nil
 	}
 }
 

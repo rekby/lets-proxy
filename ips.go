@@ -320,3 +320,31 @@ func parseNet(s string) net.IPNet {
 	}
 	return *ipnet
 }
+
+func parseAddressList(addresses string, defaultPort int) (res []net.TCPAddr) {
+	for _, addrS := range strings.Split(addresses, ",") {
+		addrTcp, err := net.ResolveTCPAddr("tcp", addrS)
+		if err == nil {
+			logrus.Debugf("Parse bind tcp addr '%v' -> '%v'", addrS, addrTcp)
+		} else {
+			addrIp, err := net.ResolveIPAddr("ip", addrS)
+			if addrIp != nil && err == nil {
+				addrTcp = &net.TCPAddr{
+					IP:   addrIp.IP,
+					Port: defaultPort,
+				}
+				logrus.Debugf("Parse bind ip addr '%v' -> '%v'", addrS, addrTcp)
+			} else {
+				logrus.Errorf("Can't parse bind address '%v'", addrS)
+			}
+		}
+		if addrTcp != nil {
+			ipv4 := addrTcp.IP.To4()
+			if ipv4 != nil {
+				addrTcp.IP = ipv4
+			}
+			res = append(res, *addrTcp)
+		}
+	}
+	return res
+}

@@ -1,3 +1,6 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/rekby/lets-proxy)](https://goreportcard.com/report/github.com/rekby/lets-proxy)
+[gocover](https://github.com/rekby/lets-proxy)
+
 Русскоязычное описание ниже (Russian below).
 
 English description

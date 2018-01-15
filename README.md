@@ -18,6 +18,8 @@ The program was created for shared hosting and can handle many thousands of doma
 
 Since lets encrypt disable TLS-SNI validation for create new certificates - lets-proxy need handle http-traffic for directory /.well-known/acme-challenge/ of certificated domain. Now it can proxy by server config or scripts to http://127.0.0.3:4443/.well-known/acme-challenge/ (bind address can be changed by arg --bind-http-validation-to). 
 
+[Http-01 validation guide](https://github.com/rekby/lets-proxy/wiki/Proxy-http-01-validation).
+
 Quick start:
 
     ./lets-proxy or lets-proxy.exe
@@ -53,7 +55,9 @@ Use --help key for details:
 Программа разрабатывается для использования на виртуальном хостинге и может работать с тысячами доменов на каждом сервере.
 С другой стороны она проста и не требует начальных настроек для запуска на персональном сервере.
 
-С момента отключения Lets encrypt варианта проверки домена через tls-sni для работы lets-proxy требуется обработка в lets-proxy проверочного http-трафика. Через настройки сервера или скрипты нужно передавать запросы к папке "/.well-known/acme-challenge/" обслуживаемых доменов на внутренний обработчик валидации lets-proxy: http://127.0.0.1:4443/.well-known/acme-challenge/ (адрес привязки может быть изменен параметром --bind-http-validation-to)
+С момента отключения Lets encrypt варианта проверки домена через tls-sni для работы lets-proxy требуется обработка в lets-proxy проверочного http-трафика. Через настройки сервера или скрипты нужно передавать запросы к папке "/.well-known/acme-challenge/" обслуживаемых доменов на внутренний обработчик валидации lets-proxy: http://127.0.0.1:4443/.well-known/acme-challenge/ (адрес привязки может быть изменен параметром --bind-http-validation-to).
+
+[Инструкция по настройке проверок http-01](https://github.com/rekby/lets-proxy/wiki/Proxy-http-01-validation).
 
 Быстрый старт:
 

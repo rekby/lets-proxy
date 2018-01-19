@@ -29,6 +29,10 @@ const (
 	HTTP01                           = "http-01"
 )
 
+var (
+	CHALLENGE_ORDER = []string{TLSSNI01, HTTP01}
+)
+
 type acmeStruct struct {
 	serverAddress string
 	privateKey    *rsa.PrivateKey
@@ -158,20 +162,25 @@ func (this *acmeStruct) authorizeDomain(ctx context.Context, domain string) (del
 		logrus.Debugf("Challenge types for domain %v: %v. Challenge combinations: %v", DomainPresent(domain), challengeTypes, auth.Combinations)
 	}
 
-	canAuthorize := false
-	var challenge *acmeapi.Challenge
-	for _, cmb := range auth.Combinations {
+	availableChannelges := make(map[string]int, len(CHALLENGE_ORDER))
+
+	for cmbIndex, cmb := range auth.Combinations {
 		if len(cmb) == 1 {
-			challenge = auth.Challenges[cmb[0]]
-			if challenge.Type == TLSSNI01 ||
-				(challenge.Type == HTTP01 && CanHttpValidation()) {
-				canAuthorize = true
-				challenge = auth.Challenges[cmb[0]]
-				break
+			val := auth.Challenges[cmb[0]]
+			if val.Type == TLSSNI01 ||
+				(val.Type == HTTP01 && CanHttpValidation()) {
+				availableChannelges[val.Type] = cmbIndex
 			}
 		}
 	}
-	if !canAuthorize {
+	var challenge *acmeapi.Challenge
+	for _, val := range CHALLENGE_ORDER {
+		if index, ok := availableChannelges[val]; ok {
+			challenge = auth.Challenges[auth.Combinations[index][0]]
+		}
+	}
+
+	if challenge == nil {
 		logrus.Errorf("Can't find good challange combination for domain: '%v'", domain)
 		return deleteAuthTokenFunc, errors.New("Can't find good challange combination")
 	}

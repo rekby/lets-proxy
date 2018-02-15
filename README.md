@@ -16,7 +16,7 @@ Lets-proxy has a TCP mode, which doesn't parse traffic and proxies it as usual T
 
 The program was created for shared hosting and can handle many thousands of domains per server. It is simple to implement and doesn't need settings to start the program on personal server/vps.
 
-Since lets encrypt disable TLS-SNI validation for create new certificates - lets-proxy need handle http-traffic for directory /.well-known/acme-challenge/ of certificated domain. Now it can proxy by server config or scripts to http://127.0.0.3:4443/.well-known/acme-challenge/ (bind address can be changed by arg --bind-http-validation-to). 
+Since lets encrypt disable TLS-SNI validation for create new certificates - lets-proxy need handle http-traffic for directory /.well-known/acme-challenge/ of certificated domain. Now it can proxy by server config or scripts to http://127.0.0.1:4443/.well-known/acme-challenge/ (bind address can be changed by arg --bind-http-validation-to). 
 
 [Http-01 validation guide](https://github.com/rekby/lets-proxy/wiki/Proxy-http-01-validation).
 

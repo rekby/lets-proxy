@@ -1,6 +1,8 @@
 package main
 
-import "github.com/miekg/dns/idn"
+import (
+	"golang.org/x/net/idna"
+)
 
 type DomainPresent string
 
@@ -9,7 +11,7 @@ func (encoded DomainPresent) String() string {
 	if *preventIDNDecode {
 		return "'" + encodedS + "'"
 	}
-	unpuny := idn.FromPunycode(encodedS)
+	unpuny, _ := idna.ToUnicode(encodedS)
 	if encodedS == unpuny {
 		return "'" + encodedS + "'"
 	} else {

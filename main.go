@@ -32,6 +32,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/golang-lru"
 	"github.com/kardianos/service"
+	"github.com/rekby/panichandler"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -46,6 +47,7 @@ const (
 	SERVICE_NAME_EXAMPLE                             = "<service-name>"
 	WORKING_DIR_ARG_NAME                             = "working-dir"
 	DEFAULT_BIND_PORT                                = 443
+	DEFAULT_BIND_HTTP_VALIDATION_PORT                = 4443
 	DAEMON_KEY_NAME                                  = "daemon"
 )
 
@@ -58,6 +60,10 @@ const (
 // constants in var
 var (
 	VERSION = "unversioned" // need be var becouse it redefine by --ldflags "-X main.VERSION" during autobuild
+)
+
+var (
+	stdErrFileGlobal *os.File // global variable - for not close file for stderr redirect while app working
 )
 
 type stateStruct struct {
@@ -75,6 +81,10 @@ func (cid ConnectionID) String() string {
 
 func (nullWriter) Write(buf []byte) (int, error) {
 	return len(buf), nil
+}
+
+func HasPrefixFold(s, prefix string) bool {
+	return len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix)
 }
 
 func main() {
@@ -134,14 +144,18 @@ func main() {
 
 	logouts := []io.Writer{}
 	if *noLogStderr || isDaemon { // Run as windows-service or unix-daemon
-		// pass - no log to stderr
+		// don't append os.Stderr to logouts
 	} else {
 		logouts = append(logouts, os.Stderr)
 	}
 
+	var logFileName string
 	if *logOutput != "-" {
+		logFileName = *logOutput
+	}
+	if logFileName != "" {
 		lr := &lumberjack.Logger{
-			Filename:   *logOutput,
+			Filename:   logFileName,
 			MaxSize:    *logrotateMb,
 			MaxAge:     *logrotateMaxAge,
 			MaxBackups: *logrotateMaxCount,
@@ -157,7 +171,7 @@ func main() {
 			logouts = append(logouts, lr)
 			go startTimeLogRotator(lr)
 		} else {
-			logrus.Errorf("Can't log to file '%v': %v", *logOutput, err)
+			logrus.Errorf("Can't log to file '%v': %v", logFileName, err)
 		}
 	}
 
@@ -173,6 +187,26 @@ func main() {
 
 	logrus.Infof("Use log level: '%v'", logrus.GetLevel())
 	logrus.Info("Version: ", VERSION)
+
+	// for unix redirect when daemon child start
+	if *stdErrToFile != "" && runtime.GOOS == "windows" {
+		fName := filepath.Join(*workingDir, *stdErrToFile)
+		var err error
+		stdErrFileGlobal, err = os.OpenFile(fName, os.O_APPEND|os.O_CREATE, 0600) // mode 0644 copied from lubmerjeck log
+		if err == nil {
+			err = panichandler.RedirectStderr(stdErrFileGlobal)
+		}
+		if err == nil {
+			logrus.Infof("Redirect stderr to file '%v'", fName)
+		} else {
+			logrus.Errorf("Can't redirect stderr to file '%v': %v", fName, err)
+		}
+		logrus.Debug("Sleep a second - need for complete redirect stderr")
+	}
+
+	if *panicTest {
+		panic("Test panic by --panic key")
+	}
 
 	if *runAs != "" && !*daemonFlag {
 		logrus.Fatal("Key --runas used without --daemon key. It isn't supported.")
@@ -240,13 +274,13 @@ func main() {
 		logrus.Info("Start interactive mode")
 
 		// Simple start
-		listeners := startListeners()
-		if listeners == nil {
-			logrus.Error("Can't start listener:", err)
-			os.Exit(1)
+		err = startWork()
+		if err == nil {
+			// sleep forever
+			var sleepChan chan struct{}
+			<-sleepChan
 		} else {
-			acceptConnections(listeners)
-			return
+			os.Exit(1)
 		}
 
 	case "install":
@@ -305,7 +339,12 @@ func main() {
 
 }
 
-func acceptConnections(listeners []*net.TCPListener) {
+func acceptConnectionsOwn(listeners []*net.TCPListener) {
+	for _, listener := range listeners {
+		go acceptConnectionsFromAListener(listener)
+	}
+}
+func acceptConnectionsTLS(listeners []*net.TCPListener) {
 	switch *proxyMode {
 	case PROXYMODE_HTTP, PROXYMODE_TCP:
 		acceptConnectionsOwn(listeners)
@@ -314,16 +353,6 @@ func acceptConnections(listeners []*net.TCPListener) {
 	default:
 		logrus.Fatalf("Bad proxy mode: %v", *proxyMode)
 	}
-}
-
-func acceptConnectionsOwn(listeners []*net.TCPListener) {
-	for _, listener := range listeners {
-		go acceptConnectionsFromAListener(listener)
-	}
-
-	// force lock lifetime - to keep old behaviour
-	var ch chan bool
-	<-ch
 }
 
 func acceptConnectionsFromAListener(listener *net.TCPListener) {
@@ -475,7 +504,7 @@ checkCertInCache:
 	}
 	defer obtainDomainsUnlock(domainsToObtain)
 
-	logrus.Debugf("Obtain certificate for domains: ", domainsToObtain)
+	logrus.Debugf("Obtain certificate for domains: %v", domainsToObtain)
 
 	// check if get cert between check cache and lock to obtain
 	cert = certificateCacheGet(baseDomain)
@@ -497,9 +526,22 @@ checkCertInCache:
 	allowedDomains := make([]string, 0, len(domainsToObtain))
 forRegexpCheckDomain:
 	for _, checkDomain := range domainsToObtain {
+		whiteList := false
+		blackList := false
 		if stringsSortedContains(whiteListFromParam, checkDomain) {
 			logrus.Debugf("Domain allowed by param whitelist: %v\n", checkDomain)
-		} else {
+			whiteList = true
+		}
+		if !whiteList {
+			for _, re := range whiteListFromParamRe {
+				if re.MatchString(checkDomain) {
+					logrus.Debugf("Domain allowed by whitelist param regexp '%v': %v", re, checkDomain)
+					whiteList = true
+					break
+				}
+			}
+		}
+		if !whiteList && !blackList {
 			for _, re := range nonCertDomainsRegexps {
 				if re.MatchString(checkDomain) {
 					logrus.Debugf("Reject obtain cert for domain %v by regexp '%v'", DomainPresent(domain), re.String())
@@ -527,13 +569,28 @@ forRegexpCheckDomain:
 			scanner := bufio.NewScanner(f)
 			for scanner.Scan() {
 				whiteListDomain := strings.TrimSpace(scanner.Text())
-				if stringsSortedContains(domainsToObtain, whiteListDomain) && !stringsSortedContains(allowedDomains, whiteListDomain) {
-					logrus.Debugf("Add domain from file whitelist: %v\n", whiteListDomain)
-					allowedDomains = stringsSortedAppend(allowedDomains, whiteListDomain)
-					if len(allowedDomains) == len(domainsToObtain) {
-						// don't read file to end if all domain allowed already
-						return
+				if HasPrefixFold(whiteListDomain, "re:") {
+					sRegexp := whiteListDomain[len("re:"):]
+					re, err := regexp.Compile(sRegexp)
+					if err == nil {
+						for _, checkDomain := range domainsToObtain {
+							if !stringsSortedContains(allowedDomains, checkDomain) && re.MatchString(checkDomain) {
+								logrus.Debugf("Add domain from file whitelist by regexp '%v': %v", re, checkDomain)
+								allowedDomains = stringsSortedAppend(allowedDomains, checkDomain)
+							}
+						}
+					} else {
+						logrus.Errorf("Error while compile regexp from whitelist file '%v': %v", sRegexp, err)
 					}
+				} else {
+					if stringsSortedContains(domainsToObtain, whiteListDomain) && !stringsSortedContains(allowedDomains, whiteListDomain) {
+						logrus.Debugf("Add domain from file whitelist: %v", whiteListDomain)
+						allowedDomains = stringsSortedAppend(allowedDomains, whiteListDomain)
+					}
+				}
+				if len(allowedDomains) == len(domainsToObtain) {
+					// don't read file to end if all domain allowed already
+					return
 				}
 			}
 		}()
@@ -546,7 +603,7 @@ forRegexpCheckDomain:
 
 	cert, err = acmeService.CreateCertificate(ctx, allowedDomains, domain)
 	if err == nil {
-		certificateCachePut(domainsToObtain[0], cert)
+		certificateCachePut(baseDomain, cert)
 
 		domainsForBlock := []string{}
 		for _, checkDomain := range allowedDomains {
@@ -570,6 +627,32 @@ func createTlsConfig() *tls.Config {
 	tlsConfig := &tls.Config{
 		GetCertificate: certificateGet,
 	}
+
+	// Map of supported curves
+	// https://golang.org/pkg/crypto/tls/#CurveID
+	var supportedCurvesMap = map[string]tls.CurveID{
+		"X25519":    tls.X25519,
+		"CURVEP256": tls.CurveP256,
+		"CURVEP384": tls.CurveP384,
+		"CURVEP521": tls.CurveP521,
+	}
+	for _, name := range strings.Split(*cryptoCurvePreferences, ",") {
+		nameUpper := strings.ToUpper(strings.TrimSpace(name))
+		if nameUpper == "" {
+			continue
+		}
+
+		if val, ok := supportedCurvesMap[nameUpper]; ok {
+			tlsConfig.CurvePreferences = append(tlsConfig.CurvePreferences, val)
+			continue
+		}
+		if intVal, err := strconv.ParseUint(nameUpper, 10, 16); err == nil {
+			tlsConfig.CurvePreferences = append(tlsConfig.CurvePreferences, tls.CurveID(intVal))
+			continue
+		}
+		logrus.Fatalf("Unknown curve name: '%s'", name)
+	}
+
 	switch strings.TrimSpace(*minTLSVersion) {
 	case "":
 	// pass
@@ -761,11 +844,25 @@ func prepare() {
 
 	for _, whiteListDomain := range strings.Split(*whiteList, ",") {
 		whiteListDomain = strings.TrimSpace(whiteListDomain)
-		if whiteListDomain != "" {
+		if whiteListDomain == "" {
+			continue
+		}
+		if HasPrefixFold(whiteListDomain, "re:") {
+			sRegexp := whiteListDomain[len("re:"):]
+			re, err := regexp.Compile(sRegexp)
+			if err == nil {
+				whiteListFromParamRe = append(whiteListFromParamRe, re)
+			} else {
+				logrus.Errorf("Bad regexp in whitelist domain args '%v': %v", sRegexp, err)
+			}
+
+		} else {
 			whiteListFromParam = append(whiteListFromParam, whiteListDomain)
 		}
 	}
 	sort.Strings(whiteListFromParam)
+	logrus.Infof("Domains whitelist: %v", whiteListFromParam)
+	logrus.Infof("Domains whitelist regexps: %v", whiteListFromParamRe)
 
 	// init service
 	var state stateStruct
@@ -780,40 +877,31 @@ func prepare() {
 	}
 
 	// bindTo
-	for _, addrS := range strings.Split(*bindToS, ",") {
-		addrTcp, err := net.ResolveTCPAddr("tcp", addrS)
-		if err == nil {
-			logrus.Debugf("Parse bind tcp addr '%v' -> '%v'", addrS, addrTcp)
-		} else {
-			addrIp, err := net.ResolveIPAddr("ip", addrS)
-			if addrIp != nil && err == nil {
-				addrTcp = &net.TCPAddr{
-					IP:   addrIp.IP,
-					Port: DEFAULT_BIND_PORT,
-				}
-				logrus.Debugf("Parse bind ip addr '%v' -> '%v'", addrS, addrTcp)
-			} else {
-				logrus.Errorf("Can't parse bind address '%v'", addrS)
-			}
-		}
-		if addrTcp != nil {
-			ipv4 := addrTcp.IP.To4()
-			if ipv4 != nil {
-				addrTcp.IP = ipv4
-			}
-			bindTo = append(bindTo, *addrTcp)
-		}
-	}
-
 	if *bindToS == "" {
 		bindTo = []net.TCPAddr{
 			{IP: net.IPv6unspecified, Port: DEFAULT_BIND_PORT},
 			{IP: net.IPv4zero, Port: DEFAULT_BIND_PORT},
 		}
+	} else {
+		bindTo = parseAddressList(*bindToS, DEFAULT_BIND_PORT)
 	}
 
 	if len(bindTo) == 0 {
 		logrus.Fatal("Nothing address to bind")
+	}
+
+	// bindHttpValidationTo
+	if *bindHttpValidationToS == "" {
+		bindHttpValidationTo = []net.TCPAddr{
+			{IP: net.IPv6unspecified, Port: DEFAULT_BIND_HTTP_VALIDATION_PORT},
+			{IP: net.IPv4zero, Port: DEFAULT_BIND_HTTP_VALIDATION_PORT},
+		}
+	} else {
+		bindHttpValidationTo = parseAddressList(*bindHttpValidationToS, DEFAULT_BIND_HTTP_VALIDATION_PORT)
+	}
+
+	if len(bindTo) == 0 {
+		logrus.Warningf("It has no bind port for http validation. Can use only tls validation.")
 	}
 
 	allowedIps := getAllowIPs()
@@ -917,9 +1005,9 @@ func saveState(state stateStruct) {
 }
 
 // return nil if can't start any listeners
-func startListeners() []*net.TCPListener {
+func startListeners(addresses []net.TCPAddr) []*net.TCPListener {
 	listeners := make([]*net.TCPListener, 0, len(bindTo))
-	for _, bindAddr := range bindTo {
+	for _, bindAddr := range addresses {
 		// Start listen
 		logrus.Infof("Start listen: %v", bindAddr)
 
@@ -967,6 +1055,26 @@ func startTimeLogRotator(logger *lumberjack.Logger) {
 		time.Sleep(sleepUntil.Sub(now))
 		logrus.Info("Rotate log:", *logrotateTime)
 		logger.Rotate()
+	}
+}
+
+func startWork() (err error) {
+	listeners := startListeners(bindTo)
+	listenersHttpValidation := startListeners(bindHttpValidationTo)
+
+	acceptConnectionsHttpValidation(listenersHttpValidation)
+
+	if listeners == nil {
+		var errText string
+		if err != nil {
+			errText = err.Error()
+		}
+		mess := "Can't start listener: " + errText
+		logrus.Error(mess)
+		return errors.New(mess)
+	} else {
+		acceptConnectionsTLS(listeners)
+		return nil
 	}
 }
 

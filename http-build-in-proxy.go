@@ -3,10 +3,9 @@ package main
 import (
 	"crypto/tls"
 	"net"
+	"net/http"
+	"net/http/httputil"
 	"net/url"
-
-	"github.com/rekby/lets-proxy/http-copy"
-	"github.com/rekby/lets-proxy/http-copy/httputil"
 
 	"time"
 
@@ -20,10 +19,6 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 
 		proxy := &httputil.ReverseProxy{}
 		proxy.Director = func(req *http.Request) {
-			// from local modify in http-copy
-			// applied // https://go-review.googlesource.com/#/c/35490/
-			// issue planned solve to go 1.9
-			// https://github.com/golang/go/issues/18686
 			localAddr := req.Context().Value(http.LocalAddrContextKey).(net.Addr)
 			targetAddr, err := getTargetAddr(ConnectionID("none"), localAddr)
 			if err != nil {
@@ -104,10 +99,6 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 
 		go server.Serve(tlsListener)
 	}
-
-	// block forever
-	var ch chan bool
-	<-ch
 }
 
 // tcpKeepAliveListener sets TCP keep-alive timeouts on accepted

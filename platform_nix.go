@@ -62,6 +62,15 @@ func daemonize() bool {
 		logrus.Infof("Pidfile: %v", daemonContext.PidFileName)
 	}
 
+	if *stdErrToFile != "" {
+		if filepath.IsAbs(*stdErrToFile) {
+			daemonContext.LogFileName = *stdErrToFile
+		} else {
+			daemonContext.LogFileName = filepath.Join(daemonContext.WorkDir, *stdErrToFile)
+		}
+
+	}
+
 	child, err := daemonContext.Reborn()
 	if err != nil {
 		logrus.Fatalf("Can't start daemon process: %v", err)

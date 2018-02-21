@@ -4,6 +4,7 @@ import (
 	"flag"
 	"net"
 	"regexp"
+	"strconv"
 	"time"
 )
 
@@ -14,11 +15,13 @@ var (
 	additionalHeadersParam        = flag.String("additional-headers", "X-Forwarded-Proto=https", "Additional headers for proxied requests. Separate multiple headers by comma.")
 	allowIPRefreshInterval        = flag.Duration("allow-ips-refresh", time.Hour, "For local, domain and ifconfig.io - how often ip addresses will be refreshed. Format https://golang.org/pkg/time/#ParseDuration.")
 	allowIPsString                = flag.String("allowed-ips", "auto", "Allowable ip addresses (ipv4,ipv6) separated by comma. It can contain special variables (without quotes): 'auto' - try to auto determine allowable address, the logic may change between versions. 'local' (all autodetected local IP) and 'nat' - detect IP by request to http://ifconfig.io/ip - it's needed for public ip auto-detection behind NAT.")
-	bindToS                       = flag.String("bind-to", ":443", "List of ports, ip addresses or port:ip separated by comma. For example: 1.1.1.1,2.2.2.2,3.3.3.3:443,4.4.4.4. Ports other then 443 may be used only if tcp-connections proxied from port 443 (iptables,nginx,socat and so on) because Let's Encrypt now checks connections using port 443 only.")
+	bindToS                       = flag.String("bind-to", ":"+strconv.Itoa(DEFAULT_BIND_PORT), "List of ports, ip addresses or port:ip separated by comma. For example: 1.1.1.1,2.2.2.2,3.3.3.3:443,4.4.4.4. Ports other then 443 may be used only if tcp-connections proxied from port 443 (iptables,nginx,socat and so on) because Let's Encrypt now checks connections using port 443 only.")
+	bindHttpValidationToS         = flag.String("bind-http-validation-to", "127.0.0.1:"+strconv.Itoa(DEFAULT_BIND_HTTP_VALIDATION_PORT), "Bind address for http-validation port. List of ports, ip addresses or port:ip separated by comma. Requests to <domain>/.well-known/acme-challenge/ must be redirect to this port for http-01 validation.")
 	blockBadDomainDuration        = flag.Duration("block-bad-domain-duration", time.Hour, "Disable trying to obtain certificate for a domain after error")
 	certDir                       = flag.String("cert-dir", "certificates", `Directory for saved cached certificates. Set cert-dir=- to disable saving of certificates.`)
 	certJsonSave                  = flag.Bool("cert-json", false, "Save JSON information about certificate near the certificate file with same name with .json extension")
 	connectionIdHeader            = flag.String("connection-id-header", "", "Header name used for sending connection id to backend in HTTP proxy mode. Default it isn't send.")
+	cryptoCurvePreferences        = flag.String("crypto-curves", "", "Names or integer values of CurveID, separated by comma. If empty - default usage. https://golang.org/pkg/crypto/tls/#CurveID")
 	daemonFlag                    = flag.Bool(DAEMON_KEY_NAME, false, "Start as background daemon. Supported in Unix OS only.")
 	defaultDomain                 = flag.String("default-domain", "", "Usage when SNI domain isn't available (has zero length). For example client doesn't support SNI. It is used to obtain a certificate only. It isn't force set header HOST in request.")
 	getIPByExternalRequestTimeout = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind NAT.")
@@ -36,6 +39,7 @@ var (
 	minTLSVersion                 = flag.String("min-tls", "", "Minimum supported TLS version: ssl3,tls10,tls11,tls12. Default is GoLang's default.")
 	noLogStderr                   = flag.Bool("no-log-stderr", false, "Suppress logging to stderr")
 	nonCertDomains                = flag.String("non-cert-domains", "", "Do not obtain certificates for matched domains. Regexpes separated by comma.")
+	panicTest                     = flag.Bool("panic", false, "throw unhandled panic (and crash program) after initialize logs. It need for test purposes (check redirect stderr work fine).")
 	pidFilePath                   = flag.String("pid-file", "lets-proxy.pid", "Write pid of process. When used with --daemon, lock the file to prevent starting daemon more than once.")
 	preventIDNDecode              = flag.Bool("prevent-idn-decode", false, "Default domain shows in log as 'domain.com' or 'xn--d1acufc.xn--p1ai' ('домен.рф'). When option used it will show as 'domain.com' or 'xn--d1acufc.xn--p1ai', without decode idn domains.")
 	privateKeyBits                = flag.Int("private-key-len", 2048, "Length of private keys in bits")
@@ -47,6 +51,7 @@ var (
 	serviceAction                 = flag.String("service-action", "", "Start, stop, install, uninstall, reinstall")
 	serviceName                   = flag.String("service-name", SERVICE_NAME_EXAMPLE, "Service name is required for service actions")
 	stateFilePath                 = flag.String("state-file", "state.json", "Filename and path to which we save some state data. For example account key.")
+	stdErrToFile                  = flag.String("stderr-to-file", "", "Redirect all stderr output to file by system call. It need for write unhandled panic to log. Empty value (default) mean no redirection. Warning: now it isn't support to redirect log file, becouse logfile rotations. It work for linux with --daemon key and for windows.")
 	subdomainsUnionS              = flag.String("subdomains-union", "www", "Comma-separated subdomains for which we try to obtain certificate on a single domain name. For example, if we receive a request to domain.com we try to obtain certificate valid for both www.domain.com and domain.com at same time, and save them in one certificate named domain.com. Changing option on running program will require that new certificates be obtained for added/removed subdomains.")
 	targetConnString              = flag.String("target", ":80", "IP, :port or IP:port. Default port is 80. Default IP is the ip address which receives the connection.")
 	mapTargetS                    = flag.String("target-map", "", "Remap target for some received ip:port. Format is receiveIP[:receivePort]=targetIP[:targetPort]. Can pass multiple remap rules, separated by comma. Format is --map=1.2.3.10=127.0.0.1,1.2.3.11=127.0.0.2:8999")
@@ -55,12 +60,12 @@ var (
 	acmeTestServer                = flag.Bool("test", false, "Use test Let's Encrypt server instead of <acme-server>")
 	timeToRenew                   = flag.Duration("time-to-renew", time.Hour*24*30, "Time to end of certificate for background renewal")
 	versionPrint                  = flag.Bool("version", false, "Print version and exit")
-	whiteList                     = flag.String("whitelist-domains", "", "Allow request certificate for the domains without any check by --non-cert-domains. Requires a list all domains including subdomains (for example domain.com,www.domain.com). This parameter doesn't reject other domains. To reject other domains use parameter --non-cert-domains. To reject all domains except those in the whitelist use --non-cert-domains=\".*\"")
+	whiteList                     = flag.String("whitelist-domains", "", `Allow request certificate for the domains without any check by --non-cert-domains. Requires a list all domains including subdomains (for example domain.com,www.domain.com). If domain start with 're:' then it check as regexp, for example: re:(www\.)-example-[0-9]*\.example\.com$. This parameter doesn't reject other domains. To reject other domains use parameter --non-cert-domains. To reject all domains except those in the whitelist use --non-cert-domains=".*"`)
 	whiteListFile                 = flag.String("whitelist-domains-file", "", "Same as --whitelist-domains but domains are read from file. One domain per line. File may updated without restarting lets-proxy")
 	workingDir                    = flag.String(WORKING_DIR_ARG_NAME, "", "Set working directory")
 )
 
-// Internal transormations of some flags
+// Internal transformations of some flags
 var (
 	realIPHeaderNames            [][]byte // IP headers, generated by the proxy, included real IP address
 	realIPHeaderNamesStrings     []string
@@ -69,11 +74,13 @@ var (
 	additionalHeadersStringPairs [][2]string
 
 	whiteListFromParam        []string
+	whiteListFromParamRe      []*regexp.Regexp
 	acmeService               *acmeStruct
 	nonCertDomainsRegexps     []*regexp.Regexp
 	paramTargetTcpAddr        *net.TCPAddr
 	subdomainPrefixedForUnion []string
 	bindTo                    []net.TCPAddr
+	bindHttpValidationTo      []net.TCPAddr
 	globalConnectionNumber    int64
 	targetMap                 map[string]*net.TCPAddr
 )

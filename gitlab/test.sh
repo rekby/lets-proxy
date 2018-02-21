@@ -3,7 +3,7 @@
 
 echo "install golang"
 
-eval "$(curl -sL https://raw.githubusercontent.com/travis-ci/gimme/master/gimme | GIMME_GO_VERSION=1.8 bash)"
+eval "$(curl -sL https://raw.githubusercontent.com/travis-ci/gimme/master/gimme | GIMME_GO_VERSION=1.9 bash)"
 
 pwd
 #ip addr
@@ -86,13 +86,31 @@ function exit_error(){
 go build -o proxy github.com/rekby/lets-proxy
 ./proxy --init-only # Generate keys. It need longer then one second - sleep time in restart. It need wait until process complete.
 
+# It isn't work now
+#./proxy --stderr-to-file=panic.txt --panic || true
+#if ! grep -q "Test panic" panic.txt; then
+#    echo "TEST PANIC FAILED"
+#    exit_error
+#fi
+
+rm -f panic.txt
+
+./proxy --stderr-to-file=panic.txt --panic --daemon
+sleep 5
+
+if ! grep -q "Test panic" panic.txt; then
+    echo "TEST DAEMON PANIC FAILED"
+    exit_error
+fi
+
+
 function restart_proxy(){
     PID=`cat lets-proxy.pid`
     if [ -n "$PID" ]; then
         kill -9 "$PID"
     fi
     ./proxy --test --logout=log.txt --loglevel=debug --real-ip-header=remote-ip,test-remote --additional-headers=https=on,protohttps=on,X-Forwarded-Proto=https --connection-id-header=Connection-ID --cert-json --daemon --pid-file=lets-proxy.pid
-    sleep 1 # Allow to start, generate keys, etc.
+    sleep 5 # Allow to start, generate keys, etc.
 }
 
 function flush_cache(){

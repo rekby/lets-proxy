@@ -25,6 +25,12 @@ import (
 const (
 	SNI01_EXPIRE_TOKEN time.Duration = time.Minute * 10
 	ACME_DOMAIN_SUFFIX               = ".acme.invalid"
+	TLSSNI01                         = "tls-sni-01"
+	HTTP01                           = "http-01"
+)
+
+var (
+	CHALLENGE_ORDER = []string{TLSSNI01, HTTP01}
 )
 
 type acmeStruct struct {
@@ -118,7 +124,7 @@ func (this *acmeStruct) CleanupTimer() {
 	time.AfterFunc(SNI01_EXPIRE_TOKEN, this.CleanupTimer)
 }
 
-func (this *acmeStruct) authorizeDomain(ctx context.Context, domain string) error {
+func (this *acmeStruct) authorizeDomain(ctx context.Context, domain string) (deleteAuthTokenFunc context.CancelFunc, err error) {
 	client, err := this.acmePool.Get(ctx)
 	if client != nil {
 		defer this.acmePool.Put(client)
@@ -126,7 +132,7 @@ func (this *acmeStruct) authorizeDomain(ctx context.Context, domain string) erro
 
 	if err != nil {
 		logrus.Errorf("Can't get acme client for authorize domain %v: %v", DomainPresent(domain), err)
-		return err
+		return deleteAuthTokenFunc, err
 	}
 
 	var auth *acmeapi.Authorization
@@ -145,7 +151,7 @@ func (this *acmeStruct) authorizeDomain(ctx context.Context, domain string) erro
 		logrus.Infof("Create authorization for domain %v", DomainPresent(domain))
 	} else {
 		logrus.Errorf("Can't create new authorization for domain %v: %v", DomainPresent(domain), err)
-		return errors.New("Can't create new authorization for domain")
+		return deleteAuthTokenFunc, errors.New("Can't create new authorization for domain")
 	}
 
 	if logrus.GetLevel() >= logrus.DebugLevel {
@@ -156,31 +162,67 @@ func (this *acmeStruct) authorizeDomain(ctx context.Context, domain string) erro
 		logrus.Debugf("Challenge types for domain %v: %v. Challenge combinations: %v", DomainPresent(domain), challengeTypes, auth.Combinations)
 	}
 
-	canAuthorize := false
-	var challenge *acmeapi.Challenge
-	for _, cmb := range auth.Combinations {
-		if len(cmb) == 1 && auth.Challenges[cmb[0]].Type == "tls-sni-01" {
-			canAuthorize = true
-			challenge = auth.Challenges[cmb[0]]
-			break
+	availableChannelges := make(map[string]int, len(CHALLENGE_ORDER))
+
+	for cmbIndex, cmb := range auth.Combinations {
+		if len(cmb) == 1 {
+			val := auth.Challenges[cmb[0]]
+			if val.Type == TLSSNI01 ||
+				(val.Type == HTTP01 && CanHttpValidation()) {
+				availableChannelges[val.Type] = cmbIndex
+			}
 		}
 	}
-	if !canAuthorize {
+	var challenge *acmeapi.Challenge
+	for _, val := range CHALLENGE_ORDER {
+		if index, ok := availableChannelges[val]; ok {
+			challenge = auth.Challenges[auth.Combinations[index][0]]
+		}
+	}
+
+	if challenge == nil {
 		logrus.Errorf("Can't find good challange combination for domain: '%v'", domain)
-		return errors.New("Can't find good challange combination")
+		return deleteAuthTokenFunc, errors.New("Can't find good challange combination")
 	}
 
-	acmeHostName, err := acmeutils.TLSSNIHostname(this.privateKey, challenge.Token)
-	if err == nil {
-		logrus.Debugf("Create acme-auth hostname for domain %v: %v", DomainPresent(domain), acmeHostName)
-	} else {
-		logrus.Errorf("Can't create acme domain for domain %v token '%v': %v", DomainPresent(domain), challenge.Token, err)
-		return errors.New("Can't create acme domain")
-	}
-	this.authDomainPut(acmeHostName)
-	// defer this.authDomainDelete(acmeHostName) // no detete auth domain - it will be cleaned up be timeout.
-	// it need for check authDomain while create cert - out of the function
+	logrus.Debugf("Select challenge type for domain '%v': %v", domain, challenge.Type)
 
+	switch challenge.Type {
+	case TLSSNI01:
+		acmeHostName, err := acmeutils.TLSSNIHostname(this.privateKey, challenge.Token)
+		if err == nil {
+			logrus.Debugf("Create acme-auth hostname for domain %v: %v", DomainPresent(domain), acmeHostName)
+		} else {
+			logrus.Errorf("Can't create acme domain for domain %v token '%v': %v", DomainPresent(domain), challenge.Token, err)
+			return deleteAuthTokenFunc, errors.New("Can't create acme domain")
+		}
+		this.authDomainPut(acmeHostName)
+		oldDeleteAuthTokenFunc := deleteAuthTokenFunc
+		deleteAuthTokenFunc = func() {
+			if oldDeleteAuthTokenFunc != nil {
+				oldDeleteAuthTokenFunc()
+			}
+			this.authDomainDelete(acmeHostName)
+		}
+
+	case HTTP01:
+		authKey, err := acmeutils.KeyAuthorization(this.privateKey, challenge.Token)
+		if err != nil {
+			logrus.Errorf("Can't acmeutils.KeyAuthorization for '%v': %v", domain, err)
+			return deleteAuthTokenFunc, err
+		}
+		Http01TokenPut(challenge.Token, authKey)
+		oldDeleteAuthTokenFunc := deleteAuthTokenFunc
+		deleteAuthTokenFunc = func() {
+			if oldDeleteAuthTokenFunc != nil {
+				oldDeleteAuthTokenFunc()
+			}
+			Http01TokenDelete(challenge.Token)
+		}
+	default:
+		logrus.Errorf("Unexpected challenge type when create challenge response: '%v'", challenge.Type)
+		return deleteAuthTokenFunc, errors.New("Unexpected challenge type when create challenge response")
+	}
 	logrus.Debugf("Create challenge response for domain %v", DomainPresent(domain))
 	challengeResponse, err := acmeutils.ChallengeResponseJSON(this.privateKey, challenge.Token, challenge.Type)
 	if err == nil {
@@ -188,7 +230,7 @@ func (this *acmeStruct) authorizeDomain(ctx context.Context, domain string) erro
 	} else {
 		logrus.Errorf("Can't create challenge response for domain %v, token '%v', challenge type %v: %v",
 			DomainPresent(domain), challenge.Token, challenge.Type, err)
-		return errors.New("Can't create challenge response")
+		return deleteAuthTokenFunc, errors.New("Can't create challenge response")
 	}
 	for i := 0; i < TRY_COUNT; i++ {
 		logrus.Debugf("Respond to challenge for domain %v", DomainPresent(domain))
@@ -204,7 +246,7 @@ func (this *acmeStruct) authorizeDomain(ctx context.Context, domain string) erro
 		logrus.Debugf("Send challenge response for domain %v", DomainPresent(domain))
 	} else {
 		logrus.Errorf("Can't send response for challenge of domain %v: %v", DomainPresent(domain), err)
-		return errors.New("Can't send response for challenge")
+		return deleteAuthTokenFunc, errors.New("Can't send response for challenge")
 	}
 
 	for i := 0; i < TRY_COUNT; i++ {
@@ -221,10 +263,10 @@ func (this *acmeStruct) authorizeDomain(ctx context.Context, domain string) erro
 		// pass
 	} else {
 		logrus.Errorf("Can't load challenge for domain %v: %v", DomainPresent(domain), err)
-		return errors.New("Can't load challenge")
+		return deleteAuthTokenFunc, errors.New("Can't load challenge")
 	}
 
-	return nil
+	return deleteAuthTokenFunc, nil
 }
 
 /*
@@ -261,9 +303,14 @@ func (this *acmeStruct) CreateCertificate(ctx context.Context, domains []string,
 }
 
 func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []string, main_domain string) (cert *tls.Certificate, err error) {
-	authorizedDomains := make([]string, 0, len(domains))
+	type authorizedDomainInfo struct {
+		domain    string
+		clearFunc func()
+	}
 
-	authorizedDomainsChan := make(chan string, len(domains))
+	authorizedDomainsInfo := make([]authorizedDomainInfo, 0, len(domains))
+
+	authorizedDomainsChan := make(chan authorizedDomainInfo, len(domains))
 	wg := &sync.WaitGroup{}
 	wg.Add(len(domains))
 
@@ -277,9 +324,9 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 				wg.Done()
 			}()
 
-			auth_err := this.authorizeDomain(ctx, auth_domain)
+			deleteAuthTokenFunc, auth_err := this.authorizeDomain(ctx, auth_domain)
 			if auth_err == nil {
-				authorizedDomainsChan <- auth_domain
+				authorizedDomainsChan <- authorizedDomainInfo{auth_domain, deleteAuthTokenFunc}
 			} else {
 				logrus.Infof("Can't authorize domain %v: %v", DomainPresent(auth_domain), auth_err)
 			}
@@ -291,28 +338,40 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 		close(authorizedDomainsChan)
 	}()
 
-	for domain := range authorizedDomainsChan {
-		authorizedDomains = append(authorizedDomains, domain)
+	authorizedDomains := make([]string, 0, len(authorizedDomainsChan))
+	for domainInfo := range authorizedDomainsChan {
+		authorizedDomainsInfo = append(authorizedDomainsInfo, domainInfo)
+		authorizedDomains = append(authorizedDomains, domainInfo.domain)
 	}
+
+	// Clear authorization after retrieve certificate (or error)
+	defer func() {
+		for _, domainInfo := range authorizedDomainsInfo {
+			if domainInfo.clearFunc != nil {
+				domainInfo.clearFunc()
+			}
+		}
+	}()
+
 	if main_domain != "" && !stringsContains(authorizedDomains, main_domain) {
-		logrus.Infof("Authorized domains '%v' doesn't contain main domain %v", authorizedDomains, DomainPresent(main_domain))
+		logrus.Infof("Authorized domains '%v' doesn't contain main domain %v", authorizedDomainsInfo, DomainPresent(main_domain))
 		return nil, errors.New("Authorized domains doesn't contain main domain")
 	}
 
 	// sort domains
-	for i := 0; i < len(authorizedDomains)-1; i++ {
+	for i := 0; i < len(authorizedDomainsInfo)-1; i++ {
 		l := strings.ToLower(authorizedDomains[i])
 		r := strings.ToLower(authorizedDomains[i+1])
 
 		// www. - to end, other - alphabet
 		if strings.HasPrefix(l, "www.") && !strings.HasPrefix(r, "www.") || l > r {
-			tmp := authorizedDomains[i]
-			authorizedDomains[i] = authorizedDomains[i+1]
-			authorizedDomains[i+1] = tmp
+			tmp := authorizedDomainsInfo[i]
+			authorizedDomainsInfo[i] = authorizedDomainsInfo[i+1]
+			authorizedDomainsInfo[i+1] = tmp
 		}
 	}
 
-	if len(authorizedDomains) == 0 {
+	if len(authorizedDomainsInfo) == 0 {
 		logrus.Infof("Can't authorize any domains from '%v'", domains)
 		return nil, errors.New("Can't authorize domains")
 	}
@@ -322,14 +381,14 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 		defer this.acmePool.Put(client)
 	}
 	if err != nil {
-		logrus.Errorf("Can't get acme client from pool for domains '%v': %v", authorizedDomains, err)
+		logrus.Errorf("Can't get acme client from pool for domains '%v': %v", authorizedDomainsInfo, err)
 		return nil, err
 	}
 
 	// Generate CSR
 	certKey, err := rsa.GenerateKey(cryptorand.Reader, *privateKeyBits)
 	if err == nil {
-		logrus.Debugf("Create private key for domains '%v'", authorizedDomains)
+		logrus.Debugf("Create private key for domains '%v'", authorizedDomainsInfo)
 	} else {
 		logrus.Errorf("Can't create rsa key for domain %v: %v", DomainPresent(main_domain), err)
 		return nil, errors.New("Can't create rsa key")
@@ -341,30 +400,30 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 		Subject:            pkix.Name{CommonName: authorizedDomains[0]},
 		DNSNames:           authorizedDomains,
 	}
-	logrus.Debugf("Create CSR for domains '%v'", authorizedDomains)
+	logrus.Debugf("Create CSR for domains '%v'", authorizedDomainsInfo)
 	csrDER, err := x509.CreateCertificateRequest(cryptorand.Reader, certRequest, certKey)
 	if err == nil {
-		logrus.Debugf("Created CSR for domains '%v'", authorizedDomains)
+		logrus.Debugf("Created CSR for domains '%v'", authorizedDomainsInfo)
 	} else {
-		logrus.Errorf("Can't create csr for domains '%v': %v", authorizedDomains, err)
+		logrus.Errorf("Can't create csr for domains '%v': %v", authorizedDomainsInfo, err)
 		return nil, errors.New("Can't create csr")
 	}
 
 	var certResponse *acmeapi.Certificate
 	for i := 0; i < TRY_COUNT; i++ {
-		logrus.Debugf("Certificate request for domains '%v'", authorizedDomains)
+		logrus.Debugf("Certificate request for domains '%v'", authorizedDomainsInfo)
 		certResponse, err = client.RequestCertificate(csrDER, ctx)
 		if err == nil {
 			break
 		} else {
-			logrus.Infof("Can't get certificate for domains '%v': %v (response: %#v)", authorizedDomains, err, certResponse)
+			logrus.Infof("Can't get certificate for domains '%v': %v (response: %#v)", authorizedDomainsInfo, err, certResponse)
 			time.Sleep(RETRY_SLEEP)
 		}
 	}
 	if err == nil {
-		logrus.Infof("Get certificate for domains '%v'", authorizedDomains)
+		logrus.Infof("Get certificate for domains '%v'", authorizedDomainsInfo)
 	} else {
-		logrus.Errorf("Can't get certificate for domains '%v': %v", authorizedDomains, err)
+		logrus.Errorf("Can't get certificate for domains '%v': %v", authorizedDomainsInfo, err)
 		return nil, errors.New("Can't request certificate")
 	}
 
@@ -381,25 +440,25 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 	certKeyPEM := pemEncode(x509.MarshalPKCS1PrivateKey(certKey), "RSA PRIVATE KEY")
 
 	tmpCert, err := tls.X509KeyPair(certPEM, certKeyPEM)
-	logrus.Debugf("Parsed cert count for domains '%v': %v", authorizedDomains, len(tmpCert.Certificate))
+	logrus.Debugf("Parsed cert count for domains '%v': %v", authorizedDomainsInfo, len(tmpCert.Certificate))
 	if err == nil {
-		logrus.Infof("Cert parsed for domains '%v'", authorizedDomains)
+		logrus.Infof("Cert parsed for domains '%v'", authorizedDomainsInfo)
 		cert = &tmpCert
 	} else {
-		logrus.Errorf("Can't parse cert for domains '%v': %v", authorizedDomains, err)
+		logrus.Errorf("Can't parse cert for domains '%v': %v", authorizedDomainsInfo, err)
 		return nil, errors.New("Can't parse cert for domain")
 	}
 
 	if len(cert.Certificate) > 0 {
 		cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
 		if err == nil {
-			logrus.Debugf("Leaf certificate parsed from domains '%v'", authorizedDomains)
+			logrus.Debugf("Leaf certificate parsed from domains '%v'", authorizedDomainsInfo)
 		} else {
-			logrus.Errorf("Can't parse leaf certificate for domains '%v': %v", authorizedDomains, err)
+			logrus.Errorf("Can't parse leaf certificate for domains '%v': %v", authorizedDomainsInfo, err)
 			cert.Leaf = nil
 		}
 	} else {
-		logrus.Errorf("Certificate for domains doesn't contain certificates '%v'", authorizedDomains)
+		logrus.Errorf("Certificate for domains doesn't contain certificates '%v'", authorizedDomainsInfo)
 		return nil, errors.New("Certificate for domain doesn't contain certificates")
 	}
 

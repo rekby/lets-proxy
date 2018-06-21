@@ -487,7 +487,7 @@ checkCertInCache:
 		}
 
 		if isBaseDomainLocked(baseDomain) {
-			logrus.Infof("Add domains '%v' to temporary skip damain set, becouse '%v' is locked", domainsToObtain,
+			logrus.Infof("Add domains '%v' to temporary skip domain set, becouse '%v' is locked", domainsToObtain,
 				baseDomain)
 			skipDomainsAdd(domainsToObtain)
 			return nil, errors.New("Domain is locked")

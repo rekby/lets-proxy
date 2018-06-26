@@ -596,7 +596,7 @@ forRegexpCheckDomain:
 		}()
 	}
 
-	logrus.Debugf("Allowed domains for '%v': '%v'", domainsToObtain, allowedDomains)
+	logrus.Debugf("Allowed domains after white and black list for '%v': '%v'", domainsToObtain, allowedDomains)
 	if !stringsContains(allowedDomains, domain) {
 		return nil, errors.New("Reject domain by regexp")
 	}

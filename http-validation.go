@@ -39,7 +39,10 @@ func (HttpValidationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// http-01 validation
 	w.Header().Set("Content-type", "text/plain")
 	fileName := strings.TrimPrefix(r.URL.Path, Http01ValidationPrefix)
-	w.Write([]byte(Http01TokenGet(fileName)))
+	domain, token := Http01TokenGet(fileName)
+	logrus.Infof("HTTP-01 response for domain '%v': %v", domain, token)
+
+	w.Write([]byte(token))
 }
 
 func CanHttpValidation() bool {
@@ -53,18 +56,24 @@ func Http01TokenDelete(key string) {
 	delete(http01Tokens, key)
 }
 
-func Http01TokenGet(key string) string {
+func Http01TokenGet(key string) (domain, token string) {
 	http01TokensMutex.RLock()
 	defer http01TokensMutex.RUnlock()
 
-	return http01Tokens[key]
+	storedVal := http01Tokens[key]
+	storedValParts := strings.SplitN(storedVal, "\n", 2)
+	if len(storedValParts) != 2 {
+		return "", ""
+	}
+	return storedValParts[0], storedValParts[1]
 }
 
-func Http01TokenPut(key, val string) {
+func Http01TokenPut(domain, key, val string) {
+	putValue := domain + "\n" + val
 	http01TokensMutex.Lock()
 	defer http01TokensMutex.Unlock()
 
-	http01Tokens[key] = val
+	http01Tokens[key] = putValue
 }
 
 func acceptConnectionsHttpValidation(listeners []*net.TCPListener) {

@@ -104,6 +104,8 @@ func (this *acmeStruct) checkDomains(ctx context.Context, domains []string) []st
 		allowedDomains = append(allowedDomains, domain)
 	}
 
+	logrus.Debugf("Self-check allowed domains for '%v': %v", domains, allowedDomains)
+
 	return allowedDomains
 }
 
@@ -211,7 +213,7 @@ func (this *acmeStruct) authorizeDomain(ctx context.Context, domain string) (del
 			logrus.Errorf("Can't acmeutils.KeyAuthorization for '%v': %v", domain, err)
 			return deleteAuthTokenFunc, err
 		}
-		Http01TokenPut(challenge.Token, authKey)
+		Http01TokenPut(domain, challenge.Token, authKey)
 		oldDeleteAuthTokenFunc := deleteAuthTokenFunc
 		deleteAuthTokenFunc = func() {
 			if oldDeleteAuthTokenFunc != nil {
@@ -388,7 +390,7 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 	// Generate CSR
 	certKey, err := rsa.GenerateKey(cryptorand.Reader, *privateKeyBits)
 	if err == nil {
-		logrus.Debugf("Create private key for domains '%v'", authorizedDomainsInfo)
+		logrus.Debugf("Create private key for domains '%v'", authorizedDomains)
 	} else {
 		logrus.Errorf("Can't create rsa key for domain %v: %v", DomainPresent(main_domain), err)
 		return nil, errors.New("Can't create rsa key")

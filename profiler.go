@@ -17,6 +17,7 @@ func startProfiler() {
 	profilerMux.Handle("/debug/pprof/symbol", CheckProfilerAccessHandler(pprof.Symbol))
 	profilerMux.Handle("/debug/pprof/trace", CheckProfilerAccessHandler(pprof.Trace))
 	profilerMux.HandleFunc("/robots.txt", func(resp http.ResponseWriter, r *http.Request) {
+		//nolint:errcheck
 		resp.Write([]byte(`User-agent: *
 Disallow: /`))
 	})
@@ -49,6 +50,7 @@ func (h CheckProfilerAccessHandler) ServeHTTP(resp http.ResponseWriter, req *htt
 	} else {
 		resp.WriteHeader(403)
 		resp.Header().Add("Content-length", "14") // "Access denied."
+		//nolint:errcheck
 		resp.Write([]byte("Access denied."))
 	}
 }

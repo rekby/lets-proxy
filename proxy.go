@@ -32,7 +32,6 @@ const (
 var (
 	poolNetBuffers sync.Pool
 	keepAliveMode  KeepAliveModeType
-	zeroTime       = time.Time{}
 )
 
 // var-constants
@@ -60,7 +59,9 @@ func connectTo(cid ConnectionID, targetAddr net.TCPAddr) (conn *net.TCPConn, err
 	}
 
 	targetConn := targetConnCommon.(*net.TCPConn)
+	//nolint:errcheck
 	targetConn.SetKeepAlive(true)
+	//nolint:errcheck
 	targetConn.SetKeepAlivePeriod(*tcpKeepAliveInterval)
 	return targetConn, nil
 }
@@ -82,6 +83,7 @@ func netbufGet() (buf []byte) {
 }
 
 func netbufPut(buf []byte) {
+	//nolint:megacheck
 	poolNetBuffers.Put(buf)
 }
 
@@ -340,14 +342,10 @@ func proxyHTTPBody(cid ConnectionID, dst, src net.Conn, headers proxyHTTPHeaders
 		if headers.ContentLength == 7 {
 			logrus.Debug(7777)
 		}
-		for i := int64(0); i < headers.ContentLength; i++ {
-			buf := make([]byte, 1)
-			_, err := src.Read(buf)
-			if err != nil {
-				s := err.Error()
-				_ = s
-			}
-			dst.Write(buf)
+		_, err = io.CopyBuffer(dst, io.LimitReader(src, headers.ContentLength), mem)
+		if err != nil {
+			logrus.Debugf("Cid '%v'. Error while proxy write content from '%v' to '%v': %v")
+			return err
 		}
 		netbufPut(mem)
 		logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy content finished.", cid, src.RemoteAddr(), dst.RemoteAddr())
@@ -375,7 +373,11 @@ func proxyHTTPBody(cid ConnectionID, dst, src net.Conn, headers proxyHTTPHeaders
 				buf.WriteByte(*b)
 			}
 			chunkHeader := buf.Bytes()
-			dst.Write(chunkHeader)
+			_, err = dst.Write(chunkHeader)
+			if err != nil {
+				logrus.Debugf("Cid '%v'. Error while chunkHeader: %v", cid, err)
+				return err
+			}
 			noDigitIndex := -0
 			for {
 				if len(chunkHeader) <= noDigitIndex {
@@ -387,7 +389,8 @@ func proxyHTTPBody(cid ConnectionID, dst, src net.Conn, headers proxyHTTPHeaders
 				noDigitIndex++
 			}
 
-			chunkLen, err := strconv.ParseInt(string(chunkHeader[:noDigitIndex]), 16, 64)
+			var chunkLen int64
+			chunkLen, err = strconv.ParseInt(string(chunkHeader[:noDigitIndex]), 16, 64)
 			if err != nil {
 				logrus.Debugf("Cid '%v'. '%v' -> '%v'. Can't parse chunk len '%s': %v", cid, src.RemoteAddr(), dst.RemoteAddr(), chunkHeader, err)
 				return err
@@ -434,6 +437,9 @@ func proxyHTTPBody(cid ConnectionID, dst, src net.Conn, headers proxyHTTPHeaders
 			} else {
 				logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy chunk: %v", cid, src.RemoteAddr(), dst.RemoteAddr(), chunkLen)
 				_, err = io.CopyBuffer(dst, io.LimitReader(src, chunkLen+2), mem) // + \r\n at end of data
+				if err != nil {
+					logrus.Debugf("Cid '%v'. '%v' -> '%v'. Proxy chunk error: %v", cid, src.RemoteAddr(), dst.RemoteAddr(), err)
+				}
 			}
 		}
 
@@ -489,8 +495,10 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 			proxyKeepAliveModeToCustomer = PROXY_KEEPALIVE_FORCE
 		}
 		logrus.Debugf("Cid '%v'. Start proxy request", cid)
+		//nolint:errcheck
 		customerConn.SetReadDeadline(time.Now().Add(*keepAliveCustomerTimeout))
 		requestHeadersRes := proxyHTTPHeaders(cid, backendConn, customerConn, proxyKeepAliveModeToBackend)
+		//nolint:errcheck
 		customerConn.SetReadDeadline(time.Now().Add(*maxRequestTime))
 
 		if requestHeadersRes.Err != nil {
@@ -499,11 +507,17 @@ func startProxyHTTP(cid ConnectionID, targetAddr net.TCPAddr, customerConn net.C
 		}
 		if requestHeadersRes.IsLimited {
 			err = proxyHTTPBody(cid, backendConn, customerConn, requestHeadersRes)
+			if err != nil {
+				logrus.Debugf("Cid '%v'. Error while proxy body: %v", cid, err)
+			}
 		} else {
 			go func() {
 				// proxy request until close connection
 				logrus.Debugf("Cid '%v'. Unlimited request mode.", cid)
-				proxyHTTPBody(cid, backendConn, customerConn, requestHeadersRes)
+				err = proxyHTTPBody(cid, backendConn, customerConn, requestHeadersRes)
+				if err != nil {
+					logrus.Debugf("Cid '%v'. Error while proxy body: %v", cid, err)
+				}
 			}()
 		}
 

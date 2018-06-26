@@ -34,8 +34,8 @@ func domainValidName(domain string) error {
 		return errors.New("Bad end symbol")
 	}
 
-	for _, byte := range []byte(domain) {
-		if !allowedDomainChars[byte] {
+	for _, latinChar := range []byte(domain) {
+		if !allowedDomainChars[latinChar] {
 			return errors.New("Bad symbol")
 		}
 	}
@@ -173,7 +173,7 @@ func getIPsFromDNS(ctx context.Context, domain, dnsServer string, recordType uin
 	dnsClient := dns.Client{}
 
 	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
-		ctxTimeout := deadline.Sub(time.Now())
+		ctxTimeout := time.Until(deadline)
 		dnsClient.DialTimeout = ctxTimeout
 		dnsClient.ReadTimeout = ctxTimeout
 		dnsClient.WriteTimeout = ctxTimeout

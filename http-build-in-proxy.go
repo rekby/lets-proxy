@@ -65,7 +65,7 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 			return nil
 		}
 
-		tlsListener := tls.NewListener(tcpKeepAliveListener{listener}, createTlsConfig())
+		tlsListener := tls.NewListener(tcpKeepAliveListener{TCPListener: listener}, createTlsConfig())
 
 		server := http.Server{}
 		server.TLSConfig = createTlsConfig()
@@ -97,7 +97,12 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 
 		server.ReadTimeout = *maxRequestTime
 
-		go server.Serve(tlsListener)
+		go func(listener net.Listener) {
+			err := server.Serve(listener)
+			if err != nil {
+				logrus.Infof("Error server connection by build-in proxy for tls listener '%v': %v", listener, err)
+			}
+		}(tlsListener)
 	}
 }
 
@@ -114,7 +119,9 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 	if err != nil {
 		return
 	}
+	//nolint:errcheck
 	tc.SetKeepAlive(true)
+	//nolint:errcheck
 	tc.SetKeepAlivePeriod(*tcpKeepAliveInterval)
 	return tc, nil
 }

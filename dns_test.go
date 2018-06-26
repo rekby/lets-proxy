@@ -15,8 +15,6 @@ func TestCompareIPs(t *testing.T) {
 func TestIPContains(t *testing.T) {
 	var slice ipSlice
 
-	slice = []net.IP{}
-	sort.Sort(slice)
 	if ipContains(slice, nil) {
 		t.Error()
 	}

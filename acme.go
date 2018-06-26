@@ -41,9 +41,8 @@ type acmeStruct struct {
 
 	mutex *sync.Mutex
 
-	authDomainsMutex      *sync.Mutex
-	authDomains           map[string]time.Time
-	backgroundCertsObtain map[string]*sync.Mutex // sync for obtain only once certificate for the domain same time
+	authDomainsMutex *sync.Mutex
+	authDomains      map[string]time.Time
 }
 
 func (this *acmeStruct) authDomainCheck(domain string) bool {
@@ -328,7 +327,7 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 
 			deleteAuthTokenFunc, auth_err := this.authorizeDomain(ctx, auth_domain)
 			if auth_err == nil {
-				authorizedDomainsChan <- authorizedDomainInfo{auth_domain, deleteAuthTokenFunc}
+				authorizedDomainsChan <- authorizedDomainInfo{domain: auth_domain, clearFunc: deleteAuthTokenFunc}
 			} else {
 				logrus.Infof("Can't authorize domain %v: %v", DomainPresent(auth_domain), auth_err)
 			}

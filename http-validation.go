@@ -42,7 +42,10 @@ func (HttpValidationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	domain, token := Http01TokenGet(fileName)
 	logrus.Infof("HTTP-01 response for domain '%v': %v", domain, token)
 
-	w.Write([]byte(token))
+	_, err := w.Write([]byte(token))
+	if err != nil {
+		logrus.Debugf("Error while write validation response for domain '%v', token '%v': %v", domain, token, err)
+	}
 }
 
 func CanHttpValidation() bool {
@@ -82,6 +85,11 @@ func acceptConnectionsHttpValidation(listeners []*net.TCPListener) {
 	for _, listener := range listeners {
 		httpServer := http.Server{}
 		httpServer.Handler = HttpValidationHandler{}
-		go httpServer.Serve(listener)
+		go func(localListener *net.TCPListener) {
+			err := httpServer.Serve(localListener)
+			if err != nil {
+				logrus.Errorf("Can't start listener '%v': %v", localListener, err)
+			}
+		}(listener)
 	}
 }

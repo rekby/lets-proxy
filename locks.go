@@ -23,7 +23,7 @@ func obtainDomainsLock(domains []string) bool {
 	certDomainsObtainingMutex.Lock()
 	defer certDomainsObtainingMutex.Unlock()
 
-	alreadyObtaining := false
+	var alreadyObtaining bool
 	for _, domain := range domains {
 		alreadyObtaining = certDomainsObtaining[domain]
 		if alreadyObtaining {

@@ -1,6 +1,6 @@
 language: go
 go:
-  - 1.10
+  - "1.10"
 gobuild_args: --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\""
 
 script: echo "Deploy only, tested on own gitlab becouse travis incoming connect restrictions."

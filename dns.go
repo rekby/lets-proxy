@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"net"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -54,12 +52,6 @@ func domainHasLocalIP(ctx context.Context, domain string) (res bool) {
 			// pass
 		}
 	}()
-
-	ipLess := func(l net.IP, r net.IP) bool {
-		l = l.To16()
-		r = r.To16()
-		return bytes.Compare([]byte(l), []byte(r)) == -1
-	}
 
 	var dnsRequests = &sync.WaitGroup{}
 
@@ -126,9 +118,6 @@ func domainHasLocalIP(ctx context.Context, domain string) (res bool) {
 			return
 		}
 
-		sort.Slice(serverResult, func(i, j int) bool {
-			return ipLess(serverResult[i], serverResult[j])
-		})
 		ipsChan <- serverResult
 	}
 

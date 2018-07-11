@@ -174,6 +174,9 @@ func getIPsFromDNS(ctx context.Context, domain, dnsServer string, recordType uin
 
 	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
 		ctxTimeout := time.Until(deadline)
+		if *dnsTimeout < ctxTimeout {
+			ctxTimeout = *dnsTimeout
+		}
 		dnsClient.DialTimeout = ctxTimeout
 		dnsClient.ReadTimeout = ctxTimeout
 		dnsClient.WriteTimeout = ctxTimeout

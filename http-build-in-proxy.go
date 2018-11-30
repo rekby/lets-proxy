@@ -130,8 +130,8 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 		return
 	}
 	//nolint:errcheck
-	tc.SetKeepAlive(true)
+	_ = tc.SetKeepAlive(true)
 	//nolint:errcheck
-	tc.SetKeepAlivePeriod(*tcpKeepAliveInterval)
+	_ = tc.SetKeepAlivePeriod(*tcpKeepAliveInterval)
 	return tc, nil
 }

@@ -61,6 +61,16 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 
 		}
 
+		if *removeExpectHeader {
+			oldDirector := proxy.Director
+			proxy.Director = func(request *http.Request) {
+				request.Header.Del("Expect")
+				if oldDirector != nil {
+					oldDirector(request)
+				}
+			}
+		}
+		proxy.FlushInterval = time.Second
 		proxy.ModifyResponse = func(resp *http.Response) error {
 			return nil
 		}

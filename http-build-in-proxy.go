@@ -61,6 +61,16 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 
 		}
 
+		if *removeExpectHeader {
+			oldDirector := proxy.Director
+			proxy.Director = func(request *http.Request) {
+				request.Header.Del("Expect")
+				if oldDirector != nil {
+					oldDirector(request)
+				}
+			}
+		}
+		proxy.FlushInterval = time.Second
 		proxy.ModifyResponse = func(resp *http.Response) error {
 			return nil
 		}
@@ -120,8 +130,8 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 		return
 	}
 	//nolint:errcheck
-	tc.SetKeepAlive(true)
+	_ = tc.SetKeepAlive(true)
 	//nolint:errcheck
-	tc.SetKeepAlivePeriod(*tcpKeepAliveInterval)
+	_ = tc.SetKeepAlivePeriod(*tcpKeepAliveInterval)
 	return tc, nil
 }

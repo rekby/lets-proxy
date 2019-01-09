@@ -847,7 +847,9 @@ func prepare() {
 	}
 	logrus.Info("Target addr: ", paramTargetTcpAddr)
 
-	subdomainPrefixedForUnion = strings.Split(*subdomainsUnionS, ",")
+	subdomainPrefixedForUnion = strings.FieldsFunc(*subdomainsUnionS, func(r rune) bool {
+		return r == ','
+	})
 	for i := range subdomainPrefixedForUnion {
 		subdomainPrefixedForUnion[i] = subdomainPrefixedForUnion[i] + "."
 	}

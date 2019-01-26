@@ -79,6 +79,13 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 
 		server := http.Server{}
 		server.TLSConfig = createTlsConfig()
+
+		mux := http.NewServeMux()
+		if *httpValidationInHttpsProxyP {
+			mux.Handle(Http01ValidationPrefix, HttpValidationHandler{})
+		}
+		mux.Handle("/", proxy)
+
 		server.Handler = proxy
 
 		switch keepAliveMode {

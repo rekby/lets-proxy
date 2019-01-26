@@ -24,16 +24,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
+	lumberjack "gopkg.in/natefinch/lumberjack.v2"
+
 	"bufio"
 	"sort"
 
 	"net/textproto"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/hashicorp/golang-lru"
 	"github.com/kardianos/service"
 	"github.com/rekby/panichandler"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 const (
@@ -421,7 +423,7 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 
 	if strings.HasSuffix(domain, ACME_DOMAIN_SUFFIX) {
 		// force generate new certificate, without caching.
-		return acmeService.CreateCertificate(ctx, []string{domain}, "")
+		return acmeService.CreateCertificate(ctx, []string{domain}, "", false)
 	}
 
 	now := time.Now()
@@ -449,7 +451,7 @@ checkCertInCache:
 
 		case cert != nil:
 			// need for background cert renew
-			if cert.Leaf.NotAfter.Before(now.Add(*timeToRenew)) {
+			if cert.Leaf.NotAfter.Before(now.Add(*timeToRenew)) || isTemporarySelfSigned(cert) {
 				go func(domainsToObtain []string, baseDomain string) {
 					if skipDomainsCheck(domainsToObtain) {
 						return
@@ -470,7 +472,7 @@ checkCertInCache:
 					func() {
 						backgroundRenewCtx, backgroundRenewCtxCancelFunc := context.WithTimeout(context.Background(), LETSENCRYPT_BACKGROUND_RENEW_CERTIFICATE_TIMEOUT*5)
 						defer backgroundRenewCtxCancelFunc()
-						cert, err := acmeService.CreateCertificate(backgroundRenewCtx, domainsToObtain, "")
+						cert, err := acmeService.CreateCertificate(backgroundRenewCtx, domainsToObtain, "", false)
 						if err == nil {
 							logrus.Infof("Background certificate obtained for: %v", cert.Leaf.DNSNames)
 							certificateCachePut(baseDomain, cert)
@@ -534,6 +536,13 @@ checkCertInCache:
 
 	sort.Strings(domainsToObtain)
 	allowedDomains := make([]string, 0, len(domainsToObtain))
+
+	if *httpsSelfSignedWhileCantRequest {
+		cert, _ := acmeService.createSelfSignedTemporaryCert(ctx, domainsToObtain)
+		logrus.Infof("Create temporary self signed certificates for domains: '%v'\n", domainsToObtain)
+		certificateCachePut(baseDomain, cert)
+	}
+
 forRegexpCheckDomain:
 	for _, checkDomain := range domainsToObtain {
 		whiteList := false
@@ -610,7 +619,7 @@ forRegexpCheckDomain:
 		return nil, errors.New("Reject domain by regexp")
 	}
 
-	cert, err = acmeService.CreateCertificate(ctx, allowedDomains, domain)
+	cert, err = acmeService.CreateCertificate(ctx, allowedDomains, domain, *httpsSelfSignedWhileCantRequest)
 	if err == nil {
 		certificateCachePut(baseDomain, cert)
 
@@ -744,6 +753,12 @@ func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
 	}
 	logrus.Infof("Start proxy from '%v' to '%v' cid '%v' domain %v", in.RemoteAddr(), &target, cid, DomainPresent(serverName))
 	startProxy(cid, target, tlsConn)
+}
+
+func isTemporarySelfSigned(cert *tls.Certificate) bool {
+	return cert != nil &&
+		cert.Leaf != nil &&
+		cert.Leaf.Issuer.CommonName == cert.Leaf.Subject.CommonName
 }
 
 func prepare() {

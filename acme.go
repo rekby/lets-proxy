@@ -4,7 +4,9 @@ package main
 // it isn't ready for usage now, but can simple code in future.
 
 import (
+	"crypto/rand"
 	"crypto/rsa"
+	"math/big"
 
 	"context"
 	cryptorand "crypto/rand"
@@ -277,15 +279,17 @@ Caller have to check ok domains in cert.Leaf.DNSNames
 
 if main_domain != "" - return cert only if it contains main_domain.
 Doesn't try to obtain cert if check of main_domain is bad or can't authorized it.
+
+selfSignedAllow - if domain checked as good, but can't retrieve certificate from LE - get self signed cert
 */
-func (this *acmeStruct) CreateCertificate(ctx context.Context, domains []string, main_domain string) (cert *tls.Certificate, err error) {
+func (this *acmeStruct) CreateCertificate(ctx context.Context, domains []string, main_domain string, selfSignedAllow bool) (cert *tls.Certificate, err error) {
 
 	// Check suffix for avoid mutex sync in DeleteAcmeAuthDomain
 	if len(domains) == 1 && strings.HasSuffix(domains[0], ACME_DOMAIN_SUFFIX) {
 		logrus.Debugf("Detect auth-domain mode for domain %v", DomainPresent(domains[0]))
 		if this.authDomainCheck(domains[0]) {
 			logrus.Debugf("Return self-signed certificate for domain %v", DomainPresent(domains[0]))
-			return this.createCertificateSelfSigned(domains[0])
+			return this.createTLSSNI01Cert(domains[0])
 		} else {
 			logrus.Debugf("Detect auth-domain is not present in list '%v'", DomainPresent(domains[0]))
 			return nil, errors.New("Not allowed auth-domain")
@@ -300,7 +304,12 @@ func (this *acmeStruct) CreateCertificate(ctx context.Context, domains []string,
 		return nil, errors.New("Main domain doesn't allowed by domainsCheck")
 	}
 
-	return this.createCertificateAcme(ctx, domainsForCert, main_domain)
+	cert, err = this.createCertificateAcme(ctx, domainsForCert, main_domain)
+	if err != nil && selfSignedAllow {
+		logrus.Errorf("Retrieve certificate for domains '%v' has error '%v', create temporary self-signed certificate")
+		cert, err = this.createSelfSignedTemporaryCert(ctx, domains)
+	}
+	return cert, err
 }
 
 func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []string, main_domain string) (cert *tls.Certificate, err error) {
@@ -466,7 +475,44 @@ func (this *acmeStruct) createCertificateAcme(ctx context.Context, domains []str
 	return cert, nil
 }
 
-func (this *acmeStruct) createCertificateSelfSigned(domain string) (cert *tls.Certificate, err error) {
+func (this *acmeStruct) createSelfSignedTemporaryCert(ctx context.Context, domains []string) (cert *tls.Certificate, err error) {
+	crt := x509.Certificate{
+		Subject: pkix.Name{
+			CommonName: domains[0],
+		},
+		Issuer: pkix.Name{
+			CommonName: domains[0],
+		},
+		SubjectKeyId:          []byte{1},
+		SerialNumber:          big.NewInt(1),
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		DNSNames:              domains,
+		SignatureAlgorithm:    x509.SHA256WithRSA,
+		PublicKeyAlgorithm:    x509.RSA,
+		IsCA:                  true,
+	}
+
+	pk, err := rsa.GenerateKey(rand.Reader, *privateKeyBits)
+	if err != nil {
+		return
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &crt, &crt, &pk.PublicKey, pk)
+	cert = &tls.Certificate{}
+	cert.Certificate = [][]byte{certDER}
+	cert.PrivateKey = pk
+	cert.Leaf, err = x509.ParseCertificate(certDER)
+	if err != nil {
+		logrus.Errorf("Error while generate tmp certificate for domains '%v': %v", domains, err)
+	}
+	return cert, nil
+}
+
+func (this *acmeStruct) createTLSSNI01Cert(domain string) (cert *tls.Certificate, err error) {
 	derCert, privateKey, err := acmeutils.CreateTLSSNICertificate(domain)
 	if err != nil {
 		logrus.Errorf("Can't create tls-sni-01 self-signed certificate for '%v': %v", DomainPresent(domain), err)

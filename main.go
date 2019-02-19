@@ -580,7 +580,7 @@ forRegexpCheckDomain:
 				defer f.Close()
 			}
 			if err != nil {
-				logrus.Error("Can't open white list file '%v': %v\n", *whiteListFile, err)
+				logrus.Errorf("Can't open white list file '%v': %v\n", *whiteListFile, err)
 				return
 			}
 
@@ -683,7 +683,7 @@ func createTlsConfig() *tls.Config {
 	case "tls12":
 		tlsConfig.MinVersion = tls.VersionTLS12
 	default:
-		logrus.Fatalf("Doesn't know tls version '%v', use default. cid '%v'", *minTLSVersion)
+		logrus.Fatalf("Doesn't know tls version '%v', use default.", *minTLSVersion)
 	}
 	return tlsConfig
 }
@@ -826,7 +826,7 @@ func prepare() {
 		logrus.Infof("Create memory cache for '%v' certificates", *inMemoryCertCount)
 		certMemCache, err = lru.New(*inMemoryCertCount)
 		if err != nil {
-			logrus.Errorf("Can't create memory cache:", err)
+			logrus.Errorf("Can't create memory cache: %v", err)
 			certMemCache = nil
 		}
 	} else {

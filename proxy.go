@@ -344,7 +344,8 @@ func proxyHTTPBody(cid ConnectionID, dst, src net.Conn, headers proxyHTTPHeaders
 		}
 		_, err = io.CopyBuffer(dst, io.LimitReader(src, headers.ContentLength), mem)
 		if err != nil {
-			logrus.Debugf("Cid '%v'. Error while proxy write content from '%v' to '%v': %v")
+			logrus.Debugf("Cid '%v'. Error while proxy write content from '%v' to '%v': %v",
+				cid, src.RemoteAddr(), dst.RemoteAddr(), err)
 			return err
 		}
 		netbufPut(mem)
@@ -406,7 +407,7 @@ func proxyHTTPBody(cid ConnectionID, dst, src net.Conn, headers proxyHTTPHeaders
 					for {
 						readBytes, err := src.Read(mem[:1])
 						if err != nil {
-							logrus.Debugf("Cid '%v'. '%v' -> '%v'. Error while read chunked trailer: %v", cid, src.RemoteAddr(), err)
+							logrus.Debugf("Cid '%v'. '%v' -> '%v'. Error while read chunked trailer: %v", cid, src.RemoteAddr(), dst.RemoteAddr(), err)
 							return err
 						}
 						if readBytes == 0 {
@@ -414,7 +415,7 @@ func proxyHTTPBody(cid ConnectionID, dst, src net.Conn, headers proxyHTTPHeaders
 						}
 						err = buf.WriteByte(mem[0])
 						if err != nil {
-							logrus.Debugf("Cid '%v'. '%v' -> '%v'. Error while write chunked trailer to buffer: %v", cid, src.RemoteAddr(), err)
+							logrus.Debugf("Cid '%v'. '%v' -> '%v'. Error while write chunked trailer to buffer: %v", cid, src.RemoteAddr(), dst.RemoteAddr(), err)
 						}
 
 						if mem[0] == '\n' {
@@ -424,7 +425,7 @@ func proxyHTTPBody(cid ConnectionID, dst, src net.Conn, headers proxyHTTPHeaders
 					line := buf.Bytes()
 					_, err = dst.Write(line)
 					if err != nil {
-						logrus.Debugf("Cid '%v'. '%v' -> '%v'. Error while write chunked trailer dst: %v", cid, src.RemoteAddr(), err)
+						logrus.Debugf("Cid '%v'. '%v' -> '%v'. Error while write chunked trailer dst: %v", cid, src.RemoteAddr(), dst.RemoteAddr(), err)
 						return err
 					}
 					if len(line) == 2 { // \r\n only

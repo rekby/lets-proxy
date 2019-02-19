@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #yum install -y iproute
 
+export GOFLAGS=-mod=vendor CGO_ENABLED=0
+
 echo "install golang"
 
 eval "$(curl -sL https://raw.githubusercontent.com/travis-ci/gimme/master/gimme | GIMME_GO_VERSION=1.11 bash)"

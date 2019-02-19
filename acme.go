@@ -241,7 +241,7 @@ func (this *acmeStruct) authorizeDomain(ctx context.Context, domain string) (del
 		if err == nil {
 			break
 		} else {
-			logrus.Info("Can't send response for challenge of domain %v: %v", DomainPresent(domain), err)
+			logrus.Infof("Can't send response for challenge of domain %v: %v", DomainPresent(domain), err)
 			time.Sleep(RETRY_SLEEP)
 		}
 	}
@@ -306,7 +306,8 @@ func (this *acmeStruct) CreateCertificate(ctx context.Context, domains []string,
 
 	cert, err = this.createCertificateAcme(ctx, domainsForCert, main_domain)
 	if err != nil && selfSignedAllow {
-		logrus.Errorf("Retrieve certificate for domains '%v' has error '%v', create temporary self-signed certificate")
+		logrus.Errorf("Retrieve certificate for domains '%v' has error '%v', create temporary self-signed certificate",
+			domainsForCert, err)
 		cert, err = this.createSelfSignedTemporaryCert(ctx, domains)
 	}
 	return cert, err

@@ -67,6 +67,7 @@ var (
 	whiteListFile                   = flag.String("whitelist-domains-file", "", "Same as --whitelist-domains but domains are read from file. One domain per line. File may updated without restarting lets-proxy")
 	workingDir                      = flag.String(WORKING_DIR_ARG_NAME, "", "Set working directory")
 	removeExpectHeader              = flag.Bool("remove-expect-header", true, "If enabled - remove Expect header from request")
+	allowAcmeHttpServerP            = flag.Bool("allow-acme-http", false, "Allow http scheme for acme server - need for testing")
 )
 
 // Internal transformations of some flags

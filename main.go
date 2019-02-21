@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hlandau/acme/acmeapi"
+
 	lru "github.com/hashicorp/golang-lru"
 
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
@@ -973,6 +975,9 @@ func prepare() {
 		acmeService.serverAddress = LETSENCRYPT_STAGING_API_URL
 	} else {
 		acmeService.serverAddress = *acmeServerUrl
+	}
+	if *allowAcmeHttpServerP {
+		acmeapi.TestingAllowHTTP = true
 	}
 
 	if *serviceAction == "" {

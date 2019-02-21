@@ -15,6 +15,7 @@ require (
 	github.com/rekby/panichandler v0.0.0-20170328105924-9a591848d332
 	github.com/sevlyar/go-daemon v0.0.0-20161117053140-8577c7ddef90
 	github.com/shiena/ansicolor v0.0.0-20151119151921-a422bbe96644 // indirect
+	github.com/stretchr/testify v1.3.0
 	golang.org/x/crypto v0.0.0-20161031180806-9477e0b78b9a // indirect
 	golang.org/x/net v0.0.0-20161110231909-0e2717dc3cc0
 	golang.org/x/sys v0.0.0-20161110161252-b699b7032584 // indirect

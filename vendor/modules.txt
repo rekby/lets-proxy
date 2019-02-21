@@ -1,5 +1,7 @@
 # github.com/Sirupsen/logrus v0.0.0-20161111120951-abc6f20dabf4
 github.com/Sirupsen/logrus
+# github.com/davecgh/go-spew v1.1.0
+github.com/davecgh/go-spew/spew
 # github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
 github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru
@@ -21,6 +23,8 @@ github.com/mattn/go-isatty
 github.com/miekg/dns
 # github.com/peterhellberg/link v1.0.0
 github.com/peterhellberg/link
+# github.com/pmezard/go-difflib v1.0.0
+github.com/pmezard/go-difflib/difflib
 # github.com/rekby/pair-connections v0.0.0-20170118080318-152f445fd49b
 github.com/rekby/pair-connections
 # github.com/rekby/panichandler v0.0.0-20170328105924-9a591848d332
@@ -29,6 +33,8 @@ github.com/rekby/panichandler
 github.com/sevlyar/go-daemon
 # github.com/shiena/ansicolor v0.0.0-20151119151921-a422bbe96644
 github.com/shiena/ansicolor
+# github.com/stretchr/testify v1.3.0
+github.com/stretchr/testify/assert
 # golang.org/x/crypto v0.0.0-20161031180806-9477e0b78b9a
 golang.org/x/crypto/ocsp
 # golang.org/x/net v0.0.0-20161110231909-0e2717dc3cc0

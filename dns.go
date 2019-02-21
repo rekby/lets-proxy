@@ -13,8 +13,13 @@ import (
 	"github.com/miekg/dns"
 )
 
+const (
+	dnsDefaultPort = ":53"
+)
+
 var (
 	allowedDomainChars [255]bool
+	dnsServers         []string
 )
 
 func init() {
@@ -121,12 +126,6 @@ func domainHasLocalIP(ctx context.Context, domain string) (res bool) {
 		ipsChan <- serverResult
 	}
 
-	dnsServers := []string{
-		"8.8.8.8:53",                  // google 1
-		"[2001:4860:4860::8844]:53",   // google 2 (ipv6)
-		"77.88.8.8:53",                // yandex 1
-		"[2a02:6b8:0:1::feed:0ff]:53", // yandex 2 (ipv6)
-	}
 	dnsRequests.Add(len(dnsServers))
 	for _, dnsServer := range dnsServers {
 		go func(server string) {
@@ -210,4 +209,33 @@ func getIPsFromDNS(ctx context.Context, domain, dnsServer string, recordType uin
 	}
 	logrus.Debugf("Receive answer from dns server '%v' for domain %v record type '%v' ips: '%v'", dnsServer, DomainPresent(domain), dns.TypeToString[recordType], res)
 	return res, nil
+}
+
+func parseDnsServers(arg string) (res []string) {
+	parts := strings.Split(arg, ",")
+	for _, part := range parts {
+		part := strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		ip := net.ParseIP(part)
+		tcpAddr, _ := net.ResolveTCPAddr("tcp", part)
+		var ipPort string
+		switch {
+		case ip.To4() != nil:
+			ipPort = ip.To4().String() + dnsDefaultPort
+		case ip.To16() != nil:
+			ipPort = "[" + ip.String() + "]" + dnsDefaultPort
+		case tcpAddr != nil:
+			ipPort = tcpAddr.String()
+		default:
+			logrus.Errorf("Error parse dns address '%v'", part)
+			continue
+		}
+		logrus.Debugf("Parse dns '%v' to '%v'", part, ipPort)
+		res = append(res, ipPort)
+	}
+	logrus.Infof("Parse dns servers: %v", res)
+	return res
 }

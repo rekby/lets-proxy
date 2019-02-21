@@ -904,6 +904,9 @@ func prepare() {
 		logrus.Errorf("Can't read state file '%v': %v", *stateFilePath, err)
 	}
 
+	// dns
+	dnsServers = parseDnsServers(*dnsServersP)
+
 	// bindTo
 	if *bindToS == "" {
 		bindTo = []net.TCPAddr{

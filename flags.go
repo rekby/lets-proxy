@@ -24,6 +24,7 @@ var (
 	cryptoCurvePreferences          = flag.String("crypto-curves", "", "Names or integer values of CurveID, separated by comma. If empty - default usage. https://golang.org/pkg/crypto/tls/#CurveID")
 	daemonFlag                      = flag.Bool(DAEMON_KEY_NAME, false, "Start as background daemon. Supported in Unix OS only.")
 	defaultDomain                   = flag.String("default-domain", "", "Usage when SNI domain isn't available (has zero length). For example client doesn't support SNI. It is used to obtain a certificate only. It isn't force set header HOST in request.")
+	dnsServersP                     = flag.String("dns-servers", "8.8.8.8,2001:4860:4860::8844,77.88.8.8,2a02:6b8:0:1::feed:0ff,1.1.1.1", "dns server for self-check domain. Default: google-ipv4, google-ipv6, yandex-ipv4, yandex-ipv6, cloudflare-ipv4")
 	dnsTimeout                      = flag.Duration("dns-timeout", time.Second*3, "Timeout for dns request")
 	getIPByExternalRequestTimeout   = flag.Duration("get-ip-by-external-request-timeout", 10*time.Second, "Timeout for request to external service for ip detection. For example when server behind NAT.")
 	httpValidationInHttpsProxyP     = flag.Bool("http-validation-in-https-proxy", true, "Handle http-01 validation requests while proxy https requests")

@@ -435,7 +435,11 @@ checkCertInCache:
 		}
 
 		cert = certificateCacheGet(baseDomain)
-		if cert != nil && !stringsContains(cert.Leaf.DNSNames, domain) && !isBaseDomainLocked(baseDomain) {
+		if isBaseDomainLocked(baseDomain) {
+			logrus.Infof("Domain '%s' (basedomain '%s') is locked. Return cert as is without check.")
+			return cert
+		}
+		if cert != nil && !stringsContains(cert.Leaf.DNSNames, domain) {
 			cert = nil
 		}
 

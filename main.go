@@ -449,7 +449,7 @@ checkCertInCache:
 			if err != nil {
 				mess += "CertError: " + err.Error()
 			}
-			logrus.Infof(mess)
+			logrus.Infof(mess, domain, baseDomain)
 			return cert, err
 		}
 

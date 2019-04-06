@@ -436,9 +436,23 @@ checkCertInCache:
 
 		cert = certificateCacheGet(baseDomain)
 		if isBaseDomainLocked(baseDomain) {
-			logrus.Infof("Domain '%s' (basedomain '%s') is locked. Return cert as is without check.")
-			return cert
+			switch {
+			case cert == nil:
+				err = errors.New("certificate doesn't exist. Return nil certificate. Remove .lock file for auto-create certificate or " +
+					"put certificate in cache folder.")
+			case cert.Leaf == nil:
+				err = errors.New("cert.Leaf is nil, but cert is not nil. Logical error. Return to developer please and check cert/key files.")
+			default:
+				err = nil
+			}
+			var mess = "Domain '%s' (basedomain '%s') is locked. Return cert as is without check."
+			if err != nil {
+				mess += "CertError: " + err.Error()
+			}
+			logrus.Infof(mess)
+			return cert, err
 		}
+
 		if cert != nil && !stringsContains(cert.Leaf.DNSNames, domain) {
 			cert = nil
 		}

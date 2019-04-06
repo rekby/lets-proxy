@@ -727,8 +727,6 @@ func getTargetAddr(cid ConnectionID, in net.Addr) (net.TCPAddr, error) {
 			return net.TCPAddr{}, errors.New("Can't cast incoming addr to tcp addr")
 		}
 		target.IP = receiveAddr.IP
-	} else {
-		target.IP = paramTargetTcpAddr.IP
 	}
 
 	if target.Port == 0 {

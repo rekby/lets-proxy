@@ -61,14 +61,31 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 
 		}
 
+		if *removeExpectHeader {
+			oldDirector := proxy.Director
+			proxy.Director = func(request *http.Request) {
+				request.Header.Del("Expect")
+				if oldDirector != nil {
+					oldDirector(request)
+				}
+			}
+		}
+		proxy.FlushInterval = time.Second
 		proxy.ModifyResponse = func(resp *http.Response) error {
 			return nil
 		}
 
-		tlsListener := tls.NewListener(tcpKeepAliveListener{listener}, createTlsConfig())
+		tlsListener := tls.NewListener(tcpKeepAliveListener{TCPListener: listener}, createTlsConfig())
 
 		server := http.Server{}
 		server.TLSConfig = createTlsConfig()
+
+		mux := http.NewServeMux()
+		if *httpValidationInHttpsProxyP {
+			mux.Handle(Http01ValidationPrefix, HttpValidationHandler{})
+		}
+		mux.Handle("/", proxy)
+
 		server.Handler = proxy
 
 		switch keepAliveMode {
@@ -97,7 +114,12 @@ func acceptConnectionsBuiltinProxy(listeners []*net.TCPListener) {
 
 		server.ReadTimeout = *maxRequestTime
 
-		go server.Serve(tlsListener)
+		go func(listener net.Listener) {
+			err := server.Serve(listener)
+			if err != nil {
+				logrus.Infof("Error server connection by build-in proxy for tls listener '%v': %v", listener, err)
+			}
+		}(tlsListener)
 	}
 }
 
@@ -114,7 +136,9 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 	if err != nil {
 		return
 	}
-	tc.SetKeepAlive(true)
-	tc.SetKeepAlivePeriod(*tcpKeepAliveInterval)
+	//nolint:errcheck
+	_ = tc.SetKeepAlive(true)
+	//nolint:errcheck
+	_ = tc.SetKeepAlivePeriod(*tcpKeepAliveInterval)
 	return tc, nil
 }

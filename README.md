@@ -63,7 +63,7 @@ Use --help key for details:
 
     ./lets-proxy или lets-proxy.exe
 
-Установить в автозапуск (домен в linux, служба в windows)
+Установить в автозапуск (демон в linux, служба в windows)
     
     ./lets-proxy --service-name=lets-proxy --service-action=install
     lets-proxy.exe --service-name=lets-proxy --service-action=install

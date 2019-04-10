@@ -315,7 +315,7 @@ func parseNet(s string) net.IPNet {
 		return net.IPNet{}
 	}
 	if ipnet == nil {
-		logrus.Error("Can't parse cidr '%v', nil result.", s)
+		logrus.Errorf("Can't parse cidr '%v', nil result.", s)
 		return net.IPNet{}
 	}
 	return *ipnet

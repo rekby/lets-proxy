@@ -90,6 +90,7 @@ func daemonize() bool {
 			}
 			logFile, _ := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, DEFAULT_FILE_MODE)
 			if logFile != nil {
+				//nolint:errcheck
 				logFile.WriteString("Start with uid 0 instead runas\n")
 				logFile.Close()
 			}

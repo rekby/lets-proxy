@@ -12,8 +12,9 @@ import (
 	"path/filepath"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/Sirupsen/logrus"
-	"github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -90,7 +91,7 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 	}
 
 	if certMemCache != nil {
-		logrus.Debugf("Put cert in memory cache for domain %v", DomainPresent(domain))
+		logrus.Debugf("Put cert in memory cache for domain %v (temporary=%v)", DomainPresent(domain), isTemporarySelfSigned(cert))
 		certMemCache.Add(domain, cert)
 	}
 
@@ -104,82 +105,86 @@ func certificateCachePut(domain string, cert *tls.Certificate) {
 		return
 	}
 
-	keyPath := filepath.Join(*certDir, domain+".key")
-	certPath := filepath.Join(*certDir, domain+".crt")
 	jsonPath := filepath.Join(*certDir, domain+".json")
 
-	keyFile, err := os.OpenFile(keyPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, PRIVATE_KEY_FILEMODE)
-	if keyFile != nil {
-		defer keyFile.Close()
-	}
-	if err != nil {
-		logrus.Errorf("Can't open file for save key '%v':%v", keyPath, err)
-		return
-	}
-
-	switch key := cert.PrivateKey.(type) {
-	case *rsa.PrivateKey:
-		keyBytes := x509.MarshalPKCS1PrivateKey(key)
-		pemBlock := pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes}
-		err = pem.Encode(keyFile, &pemBlock)
+	if isTemporarySelfSigned(cert) {
+		logrus.Infof("Doesn't save temporary certificate to file for domain: %v", domain)
+	} else {
+		keyPath := filepath.Join(*certDir, domain+".key")
+		certPath := filepath.Join(*certDir, domain+".crt")
+		keyFile, err := os.OpenFile(keyPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, PRIVATE_KEY_FILEMODE)
+		if keyFile != nil {
+			defer keyFile.Close()
+		}
 		if err != nil {
-			logrus.Errorf("Error while write bytes to rsa-key file '%v': %v", keyPath, err)
+			logrus.Errorf("Can't open file for save key '%v':%v", keyPath, err)
 			return
 		}
-	case *ecdsa.PrivateKey:
-		keyBytes, err := x509.MarshalECPrivateKey(key)
+
+		switch key := cert.PrivateKey.(type) {
+		case *rsa.PrivateKey:
+			keyBytes := x509.MarshalPKCS1PrivateKey(key)
+			pemBlock := pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes}
+			err = pem.Encode(keyFile, &pemBlock)
+			if err != nil {
+				logrus.Errorf("Error while write bytes to rsa-key file '%v': %v", keyPath, err)
+				return
+			}
+		case *ecdsa.PrivateKey:
+			keyBytes, err := x509.MarshalECPrivateKey(key)
+			if err != nil {
+				logrus.Errorf("Error while marshal ecdsa-key for domain %v: %v", DomainPresent(domain), err)
+				return
+			}
+			pemBlock := pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes}
+			err = pem.Encode(keyFile, &pemBlock)
+			if err != nil {
+				logrus.Errorf("Error while write bytes to ecdsa-key file '%v': %v", keyPath, err)
+				return
+			}
+		}
+
+		certFile, err := os.OpenFile(certPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, DEFAULT_FILE_MODE)
+		if certFile != nil {
+			defer certFile.Close()
+		}
 		if err != nil {
-			logrus.Errorf("Error while marshal ecdsa-key for domain %v: %v", DomainPresent(domain), err)
+			logrus.Errorf("Can't open file for write certificate '%v': %v", certPath, err)
 			return
 		}
-		pemBlock := pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes}
-		err = pem.Encode(keyFile, &pemBlock)
-		if err != nil {
-			logrus.Errorf("Error while write bytes to ecdsa-key file '%v': %v", keyPath, err)
-			return
+		for _, certBytes := range cert.Certificate {
+			pemBlock := pem.Block{Type: "CERTIFICATE", Bytes: certBytes}
+			err = pem.Encode(certFile, &pemBlock)
+			if err != nil {
+				logrus.Errorf("Can't write pem block to certificate '%v': %v", certPath, err)
+				return
+			}
 		}
-	}
 
-	certFile, err := os.OpenFile(certPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, DEFAULT_FILE_MODE)
-	if certFile != nil {
-		defer certFile.Close()
-	}
-	if err != nil {
-		logrus.Errorf("Can't open file for write certificate '%v': %v", certPath, err)
-		return
-	}
-	for _, certBytes := range cert.Certificate {
-		pemBlock := pem.Block{Type: "CERTIFICATE", Bytes: certBytes}
-		err = pem.Encode(certFile, &pemBlock)
-		if err != nil {
-			logrus.Errorf("Can't write pem block to certificate '%v': %v", certPath, err)
-			return
-		}
-	}
+		logrus.Infof("Save certificate for domain %v to files: %v, %v", DomainPresent(domain), keyPath, certPath)
 
-	logrus.Infof("Save certificate for domain %v to files: %v, %v", DomainPresent(domain), keyPath, certPath)
-
-	if *certJsonSave {
-		if cert.Leaf != nil {
-			info := struct {
-				Domains    []string
-				ExpireDate time.Time
-			}{}
-			info.Domains = cert.Leaf.DNSNames
-			info.ExpireDate = cert.Leaf.NotAfter.UTC()
-			jsInfoBytes, err := json.Marshal(info)
-			if err == nil {
-				err = ioutil.WriteFile(jsonPath, jsInfoBytes, DEFAULT_FILE_MODE)
+		if *certJsonSave {
+			if cert.Leaf != nil {
+				info := struct {
+					Domains    []string
+					ExpireDate time.Time
+				}{}
+				info.Domains = cert.Leaf.DNSNames
+				info.ExpireDate = cert.Leaf.NotAfter.UTC()
+				jsInfoBytes, err := json.Marshal(info)
 				if err == nil {
-					logrus.Debug("Save cert metadata to: ", jsonPath)
+					err = ioutil.WriteFile(jsonPath, jsInfoBytes, DEFAULT_FILE_MODE)
+					if err == nil {
+						logrus.Debug("Save cert metadata to: ", jsonPath)
+					} else {
+						logrus.Errorf("Can't write file '%v': %v", jsonPath, err)
+					}
 				} else {
-					logrus.Errorf("Can't write file '%v': %v", jsonPath, err)
+					logrus.Errorf("Can't marshal json cert info (%v): %v", cert.Leaf.DNSNames, err)
 				}
 			} else {
-				logrus.Errorf("Can't marshal json cert info (%v): %v", cert.Leaf.DNSNames, err)
+				logrus.Error("Certificate leaf is nil while save in cache")
 			}
-		} else {
-			logrus.Error("Certificate leaf is nil while save in cache")
 		}
 	}
 }

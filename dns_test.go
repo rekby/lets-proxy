@@ -4,6 +4,8 @@ import (
 	"net"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCompareIPs(t *testing.T) {
@@ -15,8 +17,6 @@ func TestCompareIPs(t *testing.T) {
 func TestIPContains(t *testing.T) {
 	var slice ipSlice
 
-	slice = []net.IP{}
-	sort.Sort(slice)
 	if ipContains(slice, nil) {
 		t.Error()
 	}
@@ -48,4 +48,17 @@ func TestIPContains(t *testing.T) {
 	if !ipContains(slice, net.ParseIP("2001:470:28:177:0:242:ac11:2")) {
 		t.Error()
 	}
+}
+
+func TestParseDnsStrings(t *testing.T) {
+	a := assert.New(t)
+	a.EqualValues([]string(nil), parseDnsServers(""))
+	a.EqualValues([]string{"1.2.3.4:53"}, parseDnsServers("1.2.3.4"))
+	a.EqualValues([]string{"1.2.3.4:54"}, parseDnsServers("1.2.3.4:54"))
+	a.EqualValues([]string{"[::1]:53"}, parseDnsServers("::1"))
+	a.EqualValues([]string{"[::1]:54"}, parseDnsServers("[::1]:54"))
+	a.EqualValues([]string{
+		"8.8.8.8:53", "[2001:4860:4860::8844]:53", "77.88.8.8:53", "[2a02:6b8:0:1::feed:ff]:53", "1.1.1.1:53",
+	},
+		parseDnsServers("8.8.8.8,2001:4860:4860::8844,77.88.8.8,2a02:6b8:0:1::feed:0ff,1.1.1.1"))
 }

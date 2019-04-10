@@ -24,16 +24,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
+	lumberjack "gopkg.in/natefinch/lumberjack.v2"
+
 	"bufio"
 	"sort"
 
 	"net/textproto"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/hashicorp/golang-lru"
 	"github.com/kardianos/service"
 	"github.com/rekby/panichandler"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 const (
@@ -124,7 +126,11 @@ func main() {
 			isDaemon = true
 		} else {
 			if *pidFilePath != "" {
-				ioutil.WriteFile(*pidFilePath, []byte(strconv.Itoa(os.Getpid())), 0600)
+				err := ioutil.WriteFile(*pidFilePath, []byte(strconv.Itoa(os.Getpid())), 0600)
+				if err != nil {
+					logrus.Errorf("Can't write pid file '%v': %v", *pidFilePath, err)
+					return
+				}
 			}
 		}
 	}
@@ -260,7 +266,10 @@ func main() {
 		}
 	}
 	if err == nil && !service.Interactive() {
-		s.Run()
+		err = s.Run()
+		if err != nil {
+			logrus.Errorf("Run error: %v", err)
+		}
 		return
 	}
 
@@ -414,7 +423,7 @@ func certificateGet(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, er
 
 	if strings.HasSuffix(domain, ACME_DOMAIN_SUFFIX) {
 		// force generate new certificate, without caching.
-		return acmeService.CreateCertificate(ctx, []string{domain}, "")
+		return acmeService.CreateCertificate(ctx, []string{domain}, "", false)
 	}
 
 	now := time.Now()
@@ -426,7 +435,25 @@ checkCertInCache:
 		}
 
 		cert = certificateCacheGet(baseDomain)
-		if cert != nil && !stringsContains(cert.Leaf.DNSNames, domain) && !isBaseDomainLocked(baseDomain) {
+		if isBaseDomainLocked(baseDomain) {
+			switch {
+			case cert == nil:
+				err = errors.New("certificate doesn't exist. Return nil certificate. Remove .lock file for auto-create certificate or " +
+					"put certificate in cache folder.")
+			case cert.Leaf == nil:
+				err = errors.New("cert.Leaf is nil, but cert is not nil. Logical error. Return to developer please and check cert/key files.")
+			default:
+				err = nil
+			}
+			var mess = "Domain '%s' (basedomain '%s') is locked. Return cert as is without check."
+			if err != nil {
+				mess += "CertError: " + err.Error()
+			}
+			logrus.Infof(mess, domain, baseDomain)
+			return cert, err
+		}
+
+		if cert != nil && !stringsContains(cert.Leaf.DNSNames, domain) {
 			cert = nil
 		}
 
@@ -442,7 +469,7 @@ checkCertInCache:
 
 		case cert != nil:
 			// need for background cert renew
-			if cert.Leaf.NotAfter.Before(now.Add(*timeToRenew)) {
+			if cert.Leaf.NotAfter.Before(now.Add(*timeToRenew)) || isTemporarySelfSigned(cert) {
 				go func(domainsToObtain []string, baseDomain string) {
 					if skipDomainsCheck(domainsToObtain) {
 						return
@@ -460,12 +487,15 @@ checkCertInCache:
 					}
 
 					/* Background renew independent of the request context.*/
-					background_renew_ctx, _ := context.WithTimeout(context.Background(), LETSENCRYPT_BACKGROUND_RENEW_CERTIFICATE_TIMEOUT*5)
-					cert, err := acmeService.CreateCertificate(background_renew_ctx, domainsToObtain, "")
-					if err == nil {
-						logrus.Infof("Background certificate obtained for: %v", cert.Leaf.DNSNames)
-						certificateCachePut(baseDomain, cert)
-					}
+					func() {
+						backgroundRenewCtx, backgroundRenewCtxCancelFunc := context.WithTimeout(context.Background(), LETSENCRYPT_BACKGROUND_RENEW_CERTIFICATE_TIMEOUT*5)
+						defer backgroundRenewCtxCancelFunc()
+						cert, err := acmeService.CreateCertificate(backgroundRenewCtx, domainsToObtain, "", false)
+						if err == nil {
+							logrus.Infof("Background certificate obtained for: %v", cert.Leaf.DNSNames)
+							certificateCachePut(baseDomain, cert)
+						}
+					}()
 				}(cert.Leaf.DNSNames, baseDomain)
 			}
 			return cert, nil
@@ -487,7 +517,7 @@ checkCertInCache:
 		}
 
 		if isBaseDomainLocked(baseDomain) {
-			logrus.Infof("Add domains '%v' to temporary skip damain set, becouse '%v' is locked", domainsToObtain,
+			logrus.Infof("Add domains '%v' to temporary skip domain set, becouse '%v' is locked", domainsToObtain,
 				baseDomain)
 			skipDomainsAdd(domainsToObtain)
 			return nil, errors.New("Domain is locked")
@@ -524,10 +554,16 @@ checkCertInCache:
 
 	sort.Strings(domainsToObtain)
 	allowedDomains := make([]string, 0, len(domainsToObtain))
+
+	if *httpsSelfSignedWhileCantRequest {
+		cert, _ := acmeService.createSelfSignedTemporaryCert(ctx, domainsToObtain)
+		logrus.Infof("Create temporary self signed certificates for domains: '%v'\n", domainsToObtain)
+		certificateCachePut(baseDomain, cert)
+	}
+
 forRegexpCheckDomain:
 	for _, checkDomain := range domainsToObtain {
 		whiteList := false
-		blackList := false
 		if stringsSortedContains(whiteListFromParam, checkDomain) {
 			logrus.Debugf("Domain allowed by param whitelist: %v\n", checkDomain)
 			whiteList = true
@@ -541,7 +577,7 @@ forRegexpCheckDomain:
 				}
 			}
 		}
-		if !whiteList && !blackList {
+		if !whiteList {
 			for _, re := range nonCertDomainsRegexps {
 				if re.MatchString(checkDomain) {
 					logrus.Debugf("Reject obtain cert for domain %v by regexp '%v'", DomainPresent(domain), re.String())
@@ -562,7 +598,7 @@ forRegexpCheckDomain:
 				defer f.Close()
 			}
 			if err != nil {
-				logrus.Error("Can't open white list file '%v': %v\n", *whiteListFile, err)
+				logrus.Errorf("Can't open white list file '%v': %v\n", *whiteListFile, err)
 				return
 			}
 
@@ -596,12 +632,12 @@ forRegexpCheckDomain:
 		}()
 	}
 
-	logrus.Debugf("Allowed domains for '%v': '%v'", domainsToObtain, allowedDomains)
+	logrus.Debugf("Allowed domains after white and black list for '%v': '%v'", domainsToObtain, allowedDomains)
 	if !stringsContains(allowedDomains, domain) {
 		return nil, errors.New("Reject domain by regexp")
 	}
 
-	cert, err = acmeService.CreateCertificate(ctx, allowedDomains, domain)
+	cert, err = acmeService.CreateCertificate(ctx, allowedDomains, domain, *httpsSelfSignedWhileCantRequest)
 	if err == nil {
 		certificateCachePut(baseDomain, cert)
 
@@ -665,7 +701,7 @@ func createTlsConfig() *tls.Config {
 	case "tls12":
 		tlsConfig.MinVersion = tls.VersionTLS12
 	default:
-		logrus.Fatalf("Doesn't know tls version '%v', use default. cid '%v'", *minTLSVersion)
+		logrus.Fatalf("Doesn't know tls version '%v', use default.", *minTLSVersion)
 	}
 	return tlsConfig
 }
@@ -691,8 +727,6 @@ func getTargetAddr(cid ConnectionID, in net.Addr) (net.TCPAddr, error) {
 			return net.TCPAddr{}, errors.New("Can't cast incoming addr to tcp addr")
 		}
 		target.IP = receiveAddr.IP
-	} else {
-		target.IP = paramTargetTcpAddr.IP
 	}
 
 	if target.Port == 0 {
@@ -706,7 +740,9 @@ func getTargetAddr(cid ConnectionID, in net.Addr) (net.TCPAddr, error) {
 func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
 	logrus.Debugf("Receive incoming connection from %v, cid: '%v'", in.RemoteAddr(), cid)
 
+	//nolint:errcheck
 	in.SetKeepAlive(true)
+	//nolint:errcheck
 	in.SetKeepAlivePeriod(*tcpKeepAliveInterval)
 
 	target, err := getTargetAddr(cid, in.LocalAddr())
@@ -733,6 +769,12 @@ func handleTcpConnection(cid ConnectionID, in *net.TCPConn) {
 	}
 	logrus.Infof("Start proxy from '%v' to '%v' cid '%v' domain %v", in.RemoteAddr(), &target, cid, DomainPresent(serverName))
 	startProxy(cid, target, tlsConn)
+}
+
+func isTemporarySelfSigned(cert *tls.Certificate) bool {
+	return cert != nil &&
+		cert.Leaf != nil &&
+		cert.Leaf.Issuer.CommonName == cert.Leaf.Subject.CommonName
 }
 
 func prepare() {
@@ -800,7 +842,7 @@ func prepare() {
 		logrus.Infof("Create memory cache for '%v' certificates", *inMemoryCertCount)
 		certMemCache, err = lru.New(*inMemoryCertCount)
 		if err != nil {
-			logrus.Errorf("Can't create memory cache:", err)
+			logrus.Errorf("Can't create memory cache: %v", err)
 			certMemCache = nil
 		}
 	} else {
@@ -836,7 +878,9 @@ func prepare() {
 	}
 	logrus.Info("Target addr: ", paramTargetTcpAddr)
 
-	subdomainPrefixedForUnion = strings.Split(*subdomainsUnionS, ",")
+	subdomainPrefixedForUnion = strings.FieldsFunc(*subdomainsUnionS, func(r rune) bool {
+		return r == ','
+	})
 	for i := range subdomainPrefixedForUnion {
 		subdomainPrefixedForUnion[i] = subdomainPrefixedForUnion[i] + "."
 	}
@@ -875,6 +919,9 @@ func prepare() {
 	} else {
 		logrus.Errorf("Can't read state file '%v': %v", *stateFilePath, err)
 	}
+
+	// dns
+	dnsServers = parseDnsServers(*dnsServersP)
 
 	// bindTo
 	if *bindToS == "" {
@@ -1054,6 +1101,7 @@ func startTimeLogRotator(logger *lumberjack.Logger) {
 
 		time.Sleep(sleepUntil.Sub(now))
 		logrus.Info("Rotate log:", *logrotateTime)
+		//nolint:errcheck
 		logger.Rotate()
 	}
 }
@@ -1137,7 +1185,7 @@ func usage() {
 
 	flag.PrintDefaults()
 
-	fmt.Println(`
+	fmt.Print(`
 Lock certificates for domain:
 If <certificates> contain file <basedomain>.lock - lets-proxy will not try to obtain/renew certificate.
 It will handle certificate with existed crt/key file or return error.

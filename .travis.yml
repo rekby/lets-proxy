@@ -1,21 +1,22 @@
 language: go
+env:
+  - GO111MODULE=on GOFLAGS=-mod=vendor
 go:
-  - 1.9
-gobuild_args: --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT\""
+  - "1.11"
 
 script: echo "Deploy only, tested on own gitlab becouse travis incoming connect restrictions."
 
 before_deploy:
   - mkdir release
   - cp README.md README.txt
-  - 'GOARCH=386 GOOS=linux go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=linux-i386\"" -o lets-proxy && tar -zcf release/lets-proxy-linux-i386.tar.gz lets-proxy README.txt'
-  - 'GOARCH=amd64 GOOS=linux go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=linux-amd64\"" -o lets-proxy && tar -zcf release/lets-proxy-linux-amd64.tar.gz lets-proxy README.txt'
-  - 'GOARCH=arm GOOS=linux go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=linux-arm\"" -o lets-proxy && tar -zcf release/lets-proxy-linux-arm.tar.gz lets-proxy README.txt'
-  - 'GOARCH=386 GOOS=freebsd go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=freebsd-i386\"" -o lets-proxy && tar -zcf release/lets-proxy-freebsd-i386.tar.gz lets-proxy README.txt'
+  - 'GOARCH=386   GOOS=linux   go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=linux-i386\"" -o lets-proxy && tar -zcf release/lets-proxy-linux-i386.tar.gz lets-proxy README.txt'
+  - 'GOARCH=amd64 GOOS=linux   go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=linux-amd64\"" -o lets-proxy && tar -zcf release/lets-proxy-linux-amd64.tar.gz lets-proxy README.txt'
+  - 'GOARCH=arm   GOOS=linux   go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=linux-arm\"" -o lets-proxy && tar -zcf release/lets-proxy-linux-arm.tar.gz lets-proxy README.txt'
+  - 'GOARCH=386   GOOS=freebsd go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=freebsd-i386\"" -o lets-proxy && tar -zcf release/lets-proxy-freebsd-i386.tar.gz lets-proxy README.txt'
   - 'GOARCH=amd64 GOOS=freebsd go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=freebsd-amd64\"" -o lets-proxy && tar -zcf release/lets-proxy-freebsd-amd64.tar.gz lets-proxy README.txt'
-  - 'GOARCH=arm GOOS=freebsd go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=freebsd-arm\"" -o lets-proxy && tar -zcf release/lets-proxy-freebsd-arm.tar.gz lets-proxy README.txt'
+  - 'GOARCH=arm   GOOS=freebsd go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=freebsd-arm\"" -o lets-proxy && tar -zcf release/lets-proxy-freebsd-arm.tar.gz lets-proxy README.txt'
   - unix2dos -n README.md README.txt
-  - 'GOARCH=386 GOOS=windows go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=windows-i386\"" -o lets-proxy.exe && zip release/lets-proxy-windows-i386.zip lets-proxy.exe README.txt'
+  - 'GOARCH=386   GOOS=windows go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=windows-i386\"" -o lets-proxy.exe && zip release/lets-proxy-windows-i386.zip lets-proxy.exe README.txt'
   - 'GOARCH=amd64 GOOS=windows go build --ldflags "-X \"main.VERSION=$TRAVIS_TAG commit $TRAVIS_COMMIT os=windows-amd64\"" -o lets-proxy.exe && zip release/lets-proxy-windows-amd64.zip lets-proxy.exe README.txt'
 
 addons:

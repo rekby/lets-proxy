@@ -49,6 +49,7 @@ func (pool *acmeClientPool) Get(ctx context.Context) (*acmeapi.Client, error) {
 		client.HTTPClient = &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
+					//nolint:gas
 					InsecureSkipVerify: true,
 				},
 			},

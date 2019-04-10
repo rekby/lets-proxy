@@ -89,6 +89,10 @@ func HasPrefixFold(s, prefix string) bool {
 	return len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix)
 }
 
+func init() {
+    os.Setenv("GODEBUG", os.Getenv("GODEBUG")+",tls13=1")
+}
+
 func main() {
 	flag.Usage = usage
 	flag.Parse()

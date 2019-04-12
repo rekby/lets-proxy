@@ -1,0 +1,13 @@
+*.exe
+*.pid
+
+.idea/
+.vscode/
+lets-proxy.iml
+state.json
+certificates/
+log.txt
+whitelist.txt
+
+lets-proxy
+panic.txt

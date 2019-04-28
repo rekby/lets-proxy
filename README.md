@@ -1,10 +1,12 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/rekby/lets-proxy)](https://goreportcard.com/report/github.com/rekby/lets-proxy)
-[gocover](https://github.com/rekby/lets-proxy)
 
 Русскоязычное описание ниже (Russian below).
 
 English description
 ===================
+Now this version program support for bugfix, but no active development.
+New version are in development, welcome to issues: https://github.com/rekby/lets-proxy2
+
 A reverse-proxy server to handle https requests transparently. By default Lets-proxy handles
 https requests to port 443 and proxies them as http to port 80 on the same IP address.
 
@@ -42,6 +44,10 @@ Use --help key for details:
 
 Русский (Russian):
 ==================
+
+Эта версия поддерживается в части исправления существующих багов, но активно не разрабатывается.
+Активная разработка ведётся в https://github.com/rekby/lets-proxy2 там можно оставлять все пожелания и замечания.
+
 
 Реверс-прокси сервер для прозрачной обработки https-запросов. Для начала использования достаточно просто запустить его на сервере с 
 запущенным http-сервером. При этом lets-proxy начнёт слушать порт 433 и передавать запросы на порт 80 с тем же IP-адресом.
